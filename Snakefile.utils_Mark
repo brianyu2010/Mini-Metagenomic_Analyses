@@ -1,0 +1,46 @@
+# Library of helper functions and common rules
+
+def get_scratch(SSD=False):
+  """ Returns the location of scratch space """
+  if SSD:
+    return os.environ["LOCAL_SSD"]
+  else:
+    return os.environ["LOCAL_SATA"]
+
+def push(input, SSD):
+  """ Copies input to scratch space """
+  SCRATCH = get_scratch(SSD)
+  shell("rsync {input} {SCRATCH}/input/")
+  return SCRATCH
+
+def sinput(input, SCRATCH):
+  """ Maps original input to scratch space input """
+  return list(map(lambda s: SCRATCH+"/input/"+os.path.basename(s), input))
+
+def soutput(output, SCRATCH):
+  """ Maps original output to scratch space output """
+  return list(map(lambda s: SCRATCH+"/"+os.path.basename(s), output))
+
+def local_sync(input, output, SSD=False):
+  """ Helper function to setup local space """
+  SCRATCH = push(input, SSD)
+  return SCRATCH, output, sinput(input, SCRATCH), soutput(output, SCRATCH)
+  
+def pop(source, dest):
+  """ Copies output to required place """
+  for a,b in zip(source, dest):
+      shell("rsync {a} {b}")
+
+rule fastq_stats:
+  input: "{f}.{r}.fastq"
+  output: "{f}.{r}.stats.txt"
+  params: name="fastq_stats", partition="general", mem="1024"
+  threads: 1
+  priority: 10
+  run:
+    version = VERSION
+    sample = os.path.basename(wildcards.f).split(".")[0]
+    stage = wildcards.f.split("/")[-2]
+    stat = "fastq." + wildcards.r
+    shell("./software/fastq_stats.sh {input} {version} {sample} {stage} {stat} > {output}")
+

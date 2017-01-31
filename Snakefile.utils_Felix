@@ -1,0 +1,22 @@
+##### Functions for transferring files to/from cluster
+# Used in Snakemake file using include
+
+def name_on_scratch(s, scratch):
+    return scratch+"/"+os.path.basename(s)
+
+def names_on_scratch(names, scratch):
+    return [name_on_scratch(n, scratch) for n in names]
+
+def cp_to_scratch(inputs, scratch):
+    for i in inputs:
+      cmd = "cp " + i + " " + name_on_scratch(i, scratch)
+      subprocess.call(cmd, shell=True)
+    return None
+
+def cp_from_scratch(outputs, scratch):
+    for o in outputs:
+        cmd = "cp " + name_on_scratch(o, scratch) + " " + o
+        subprocess.call(cmd, shell=True)
+    return None
+
+

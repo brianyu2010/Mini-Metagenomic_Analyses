@@ -1,0 +1,1 @@
+squeue -u 'brianyu' | grep requeued | tr -s ' ' | cut -d ' ' -f 2 | xargs -I% scontrol release %
