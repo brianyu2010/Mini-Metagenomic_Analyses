@@ -39,6 +39,7 @@
 #            complex metagenomes, this file uses Megahit for assembly.
 #            This file uses rules in Snakefile_import.py and a new file Snakefile_bulk_assembly.py
 # 2017.01.13 Updated for the new snakemake syntax and updated to align with new code.
+# 2017.02.01 Updated for Sherlock cluster
 
 # Import packages
 import os, glob, subprocess
@@ -62,28 +63,14 @@ subsampleIDs = list(set(sample_table.index))
 biosample = parameters.ix["biosample_name",'entry']
 code_dir = parameters.ix["code_directory",'entry']
 tool_dir = parameters.ix['tool_directory','entry']
-
-# similarity = parameters.ix['similarity','entry']
-# kmer_len = parameters.ix['kmer_len','entry']
-# split_size = parameters.ix['split_size','entry'] # this is in terms of reads
-# contig_thresh = parameters.ix['contig_thresh','entry'] # this is contig length threshold for Blast
-
-"""
-# Compute the number of files subcontigs from each subsamples (and total) needs to be split into
-depth_table = pd.read_table(root_folder+parameters.ix["subsample_count_file",'entry'], index_col=0, header=None)
-# total reads should be the 0th column with header 1. there should only be one column
-depth_table.rename(columns={1: 'total_reads'}, inplace=True) 
-depth_table['subsample_clust_file_numbers'] = [int(max(1,np.floor(x/int(parameters.ix['subsample_split_size','entry'])))) \
-  for x in depth_table['total_reads']]
-# biosample_clust_file_numbers = 4
-biosample_clust_file_numbers = int(max(1, depth_table.sum(0)['total_reads']/int(parameters.ix['biosample_split_size','entry'])))
-#print(depth_table)
-#print(biosample_clust_file_numbers)
-"""
+python2_env = parameters.ix['python2_environment_name','entry']
+python3_env = parameters.ix['python3_environment_name','entry']
+work_directory_base = parameters.ix['work_directory_base','entry']
+work_directory = work_directory_base+'/'+parameters.ix["biosample_name",'entry']
 
 # 2016.02.20 Added this line to avoid multi-line shell commands under
 # the new snakemake syntax.
-shell.prefix("set -euo pipefail;")
+# shell.prefix("set -euo pipefail;")
 
 # Add include files or other snakefile rule files
 include: "Snakefile.utils_Mark"
@@ -98,8 +85,8 @@ include: "Snakefile_bulk_assembly.py"
 
 # User defined constants
 workdir: "/local10G/brianyu/snakemake_results/"+parameters.ix["biosample_name",0]
-work_directory = "/local10G/brianyu/snakemake_results/"+parameters.ix["biosample_name",0]
-resources_dir = "/local10G/resources/"
+# work_directory = "/local10G/brianyu/snakemake_results/"+parameters.ix["biosample_name",0]
+# resources_dir = "/local10G/resources/"
 
 #################################
 # A list of all the rules
@@ -111,8 +98,6 @@ rule all:
   # input:  expand("{subsample}/BlastResults.{subsample}.txt", subsample=subsampleIDs)
   input: 
     # These are possible outputs to request
-    # expand("{subsample}/contigCoverage.{subsample}.cnt", subsample=subsampleIDs), 
-    # expand("{subsample}/BlastResults.{subsample}.txt", subsample=subsampleIDs),
     expand("{subsample}/megahit_quast_report.{subsample}.txt", subsample=subsampleIDs),
     expand("{subsample}/metaSPAdes_quast_report.{subsample}.txt", subsample=subsampleIDs),
     # fastqc of fastq reads in subsamples
@@ -120,9 +105,11 @@ rule all:
     expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs)
   params: 
     name="top_level_assembly", 
+    qos="normal",
+    time="30:00",
     partition="general", 
-    mem="3000" 
+    mem="4000" 
   threads: 1
-  version: "1.0"
+  version: "2.0"
 
 

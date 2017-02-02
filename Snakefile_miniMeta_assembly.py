@@ -1,4 +1,4 @@
-###############################################
+#################################################################################
 # Snakemake rules associated with 
 # Assembly of the entire run, all sequenced combined
 # Snakemake file
@@ -14,7 +14,9 @@
 #            1. Combine all subsample contigs, threshold
 #            2. Remove 200 bp from each end and align reads from each sub-sample
 #            3. remove reads that align and assemble with --trusted-contigs
-###############################################
+# 2017.02.21 Updated to be consistent with Sherlock.
+#            Removed a lot of helper .sh functions
+###################################################################################
 
 
 rule combine_threshold_subsample_contigs:
@@ -30,35 +32,35 @@ rule combine_threshold_subsample_contigs:
     "Combined_Analysis/subsample_bowtie_{id}.rev.2.bt2l"
   params:
     name="combine_threshold_subsample_contigs",
-    partition="long",
-    mem="63000", # don't change this
+    qos="normal",
+    time="24:00:00",
+    partition="normal",
+    mem="64000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: 12
-  version: "1.0"
+  threads: 16
+  version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
     # Performing contig trimming and bowtie2-build
     # The variable work_directory is used in this part
     shell("""
-      date
-      cp {code_dir}/threshold_scaffolds.py {scratch}
-      cp {code_dir}/process_scaffolds.py {scratch}
-      cd {scratch}; set +u
+      date; source activate {python2_env}
+      cd {scratch};
       cat {input_on_scratch} > combined_contigs.fasta
-      source /local10G/brianyu/anaconda/bin/activate /local10G/brianyu/anaconda/
-      python process_scaffolds.py --lengthThresh {params.contig_thresh} combined_contigs.fasta {output_on_scratch[0]}
-      python process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {output_on_scratch[0]} trimmed_subsample_contigs.fasta
-      {tool_dir}/bowtie2-2.2.6/bowtie2-build --large-index -f trimmed_subsample_contigs.fasta subsample_bowtie_{wildcards.id}
-      date
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} combined_contigs.fasta {output_on_scratch[0]}
+      python {code_dir}/process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {output_on_scratch[0]} trimmed_subsample_contigs.fasta
+      source activate {python3_env}
+      bowtie2-build --quiet --large-index --threads {threads} -f trimmed_subsample_contigs.fasta subsample_bowtie_{wildcards.id}
+      source deactivate; date
       """)
     # Move the rest of the reads back
     cp_from_scratch(output, scratch)
 
-
+"""
 # This rule also needs pre-built bowtie index, not part of input
 rule remove_aligned_reads:
   input:
@@ -77,54 +79,64 @@ rule remove_aligned_reads:
     "{subsample}/leftover_reads_S.{subsample}.fastq"
   params:
     name="remove_aligned_reads",
+    qos="normal",
+    time="12:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
-    #partition="general",
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
-    #mem="10500"
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
   threads: int(parameters.ix['subsample_bowtie2_thread','entry'])
-  #threads: 2
-  version: "1.0"
+  version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
-    # Performing bowtie2 alignment
-    # Trim contigs by 150 bp at both ends first
-    # align, extract unaligned reads, turn bam to fastq
+    # Performing bowtie2 alignment --time --phred33 --un <path> --un-conc <path>
     # bowtie2 can handle fastq.gz files
-    shell("""
-      date
+    shell(""
+      date; source activate {python3_env}
       basename=$(echo {input[3]} | cut -d/ -f2 | cut -d. -f1)
       echo $basename
       cd {scratch}
-      {tool_dir}/bowtie2-2.2.6/bowtie2 --fast-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignResults.sam
-      {tool_dir}/samtools-1.3/samtools view -b -F 0x002 -o unmapped.bam alignResults.sam
-      {tool_dir}/samtools-1.3/samtools fastq -1 {output_on_scratch[0]} -2 {output_on_scratch[1]} unmapped.bam > {output_on_scratch[2]}
-      """)
+      echo 'Using end-to-end alignment to remove reads'
+      bowtie2 --time --phred33 --fast -I 100 -X 2000 -p {threads} --un leftover --un-conc leftover -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignResults.sam
+      mv leftover/un-conc-mate.1 {output_on_scratch[0]}
+      mv leftover/un-conc-mate.2 {output_on_scratch[1]}
+      mv leftover/un-seqs {output_on_scratch[2]}
+      source deactivate
+      "")
     # Move the rest of the reads back
     cp_from_scratch(output, scratch)
+"""
 
 
-
-rule create_miniMeta_assembly_YAML:
-  input:
+rule minimeta_spade_assembly:
+  # order of the inputs are paired1 paired2 single1 single2
+  # 2017.01.12 input is edited to use YAML file and combined subsample contigs
+  input: 
     expand("{subsample}/leftover_reads_P1.{subsample}.fastq", subsample=subsampleIDs),
     expand("{subsample}/leftover_reads_P2.{subsample}.fastq", subsample=subsampleIDs),
     expand("{subsample}/leftover_reads_S.{subsample}.fastq", subsample=subsampleIDs),
     expand("Combined_Analysis/subsample_contigs.{id}.fasta", id=biosample)
-  output:
-    # This is in the root work_directory
-    "miniMetaAssembly_reads.yaml"
-  params:
-    name="create_miniMeta_assembly_YAML",
-    partition="general",
-    mem="1000" # don't change this
-  threads: 1
-  version: "1.0"
+  output: # metaquast does not require output file, just output dir
+    "miniMetaAssembly_reads.yaml", # in the root work_directory because of spades paths
+    "Combined_Analysis/minimeta_contigs.{id}.fasta", 
+    "Combined_Analysis/minimeta_scaffolds.{id}.fasta" 
+  params:    
+    name="minimeta_spade_assembly",
+    qos="normal",
+    time="7-0",  # means 7 days
+    partition=parameters.ix['biosample_assembly_partition','entry'], 
+    mem=parameters.ix['biosample_assembly_memory','entry'],
+    contig_thresh=parameters.ix['biosample_contig_thresh','entry'],
+    kmer=parameters.ix['biosample_spades_kmerlist','entry'] # "21,33,44,77,99"
+  threads: int(parameters.ix['biosample_assembly_thread','entry'])
+  version: "2.0"
   run:
+    # Managing files and obtain scratch location
+    scratch = os.environ["LOCAL_SCRATCH"]
+    print(work_directory)
     # creating a text file to pass to SPAdes
     numfiles = int((len(input)-1)/3)
     print(numfiles)
@@ -157,42 +169,27 @@ rule create_miniMeta_assembly_YAML:
       d = f.write('    ]\n')
       d = f.write('  }\n')
       d = f.write(']')
-
-
-
-rule minimeta_spade_assembly:
-  # order of the inputs are paired1 paired2 single1 single2
-  # 2017.01.12 input is edited to use YAML file and combined subsample contigs
-  input: 
-    "miniMetaAssembly_reads.yaml", # in the root work_directory because of spades paths
-    expand("{subsample}/leftover_reads_P1.{subsample}.fastq", subsample=subsampleIDs),
-    expand("{subsample}/leftover_reads_P2.{subsample}.fastq", subsample=subsampleIDs),
-    expand("{subsample}/leftover_reads_S.{subsample}.fastq", subsample=subsampleIDs),
-    expand("Combined_Analysis/subsample_contigs.{id}.fasta", id=biosample)
-  output: 
-    "Combined_Analysis/minimeta_contigs.{id}.fasta", 
-    "Combined_Analysis/minimeta_scaffolds.{id}.fasta",
-    "Combined_Analysis/quast_report_miniMeta.{id}.txt"
-  params:    
-    name="minimeta_spade_assembly", 
-    partition=parameters.ix['biosample_assembly_partition','entry'], 
-    mem=parameters.ix['biosample_assembly_memory','entry']
-  threads: int(parameters.ix['biosample_assembly_thread','entry'])
-  version: "1.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    print(work_directory)
-    # Assembly using spades V3.5.0 much better kmer normalization
-    # shell("bash {code_dir}/snakehelper_bigmemAssembly.sh {scratch} {input} {tool_dir} {params.mem} {threads} {work_directory}/Combined_Analysis/spade_output_{wildcards.id}")
-    shell("bash {code_dir}/snakehelper_bigmemYAMLAssembly.sh {scratch} {input[0]} {tool_dir} {params.mem} {threads} {work_directory}/Combined_Analysis/spades_minimetaAssembly_{wildcards.id}")
-    shell("cp Combined_Analysis/spades_minimetaAssembly_{wildcards.id}/contigs.fasta {output[0]}")
-    shell("cp Combined_Analysis/spades_minimetaAssembly_{wildcards.id}/scaffolds.fasta {output[1]}")
+    print('Completed creating YAML file')
+    # Performing spade assembly, not using --meta
+    # quast.py --plots-format svg --gene-finding -meta -m {params.contig_thresh} -t {threads} -o {scratch}/quast_output {output[1]}
     shell("""
-      set +u
-      source /local10G/brianyu/anaconda/bin/activate /local10G/brianyu/anaconda/
-      python {tool_dir}/quast-3.2/quast.py -o {scratch}/quast_output {output[0]}
-      cp {scratch}/quast_output/report.txt {output[2]}
+      echo {scratch}; date; pwd; echo
+      source activate {python2_env}
+      mem=$( echo {params.mem} | rev | cut -c 4- | rev )
+      echo 'memory used in Gb is '$mem
+      spades_output_dir=Combined_Analysis/spades_minimetaAssembly_{wildcards.id}
+      source activate {python3_env}
+      if [ -d $spades_output_dir ]
+      then
+      time spades.py --only-assembler -k {params.kmer} -t {threads} --continue --sc -m $mem --dataset {output[0]} -o $spades_output_dir
+      else
+      time spades.py --only-assembler -k {params.kmer} -t {threads} --sc -m $mem --dataset {output[0]} -o $spades_output_dir
+      fi
+      cp $spades_output_dir/contigs.fasta {output[1]}
+      cp $spades_output_dir/scaffolds.fasta {output[2]}
+      source activate {python2_env}
+      metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
+      date; source deactivate
       """)
     assert(file_empty(output)),"Either the contig or scaffold file is empty."
 

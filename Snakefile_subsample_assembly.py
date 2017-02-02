@@ -1,20 +1,22 @@
-###############################################
+##############################################################
 # Snakemake rules associated with assembly
 # blast, quast of a single subsample.
 # this file must be included into another 
 # Snakemake file
-###############################################
+#
+# 2017.01.31 Adapted this file for sherlock.stanford.edu
+#            scratch = os.environ["LOCAL_SCRATCH"]
+#            each "normal" partition core contains 4GB memory
+##############################################################
 
 # rules
 
-rule spade_assembly:
+rule subsample_spade_assembly:
   # order of the inputs are paired1 paired2 single1 single2
   # 2015.11.30 This rule is still using splitNcluster outputs.
   #            These need to be changed to the P1 P2 S1 S2 from trim
   # 2015.12.01 Changes were made to use trimmed reads directly
   input: 
-    #"{subsample}/ClustPair1.{subsample}.fastq", 
-    #"{subsample}/ClustPair2.{subsample}.fastq"
     "{subsample}/P1.{subsample}.fastq",
     "{subsample}/P2.{subsample}.fastq",
     "{subsample}/S1.{subsample}.fastq", 
@@ -28,14 +30,17 @@ rule spade_assembly:
     "{subsample}/SPAdes_report.{subsample}.log",
     "{subsample}/SPAdes_params.{subsample}.txt"
   params: 
-    name="subsample_spade_assembly", 
+    name="subsample_spade_assembly",
+    qos="normal",
+    time="23:00:00", # means 2 days
     partition=parameters.ix['subsample_assembly_partition','entry'], 
-    mem=parameters.ix['subsample_assembly_memory','entry']
+    mem=parameters.ix['subsample_assembly_memory','entry'],
+    kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
   threads: int(parameters.ix['subsample_assembly_thread','entry'])
-  version: "1.0"
+  version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # perform file size check
@@ -46,14 +51,31 @@ rule spade_assembly:
     # if file size check passes then proceed
     if file_size_check:
       cp_to_scratch(input, scratch)
-      # Assembly using spades V3.5. Only include output_on_scratch[0:2] here 
+      # Assembly using spades V3.9. Only include output_on_scratch[0:2] here 
       # because the snakemake_spadeassembly file is not written to handle the 
       # other two outputs. However you can copy those back later from SCRATCH
       # by the way, [0:2] actually only contains 0th and 1st entry
-      # shell("bash {code_dir}/snakehelper_spadeAssembly.sh {scratch} {input_on_scratch} fakeR1 fakeR2 {output_on_scratch[0]} {output_on_scratch[1]} {tool_dir} {params.mem} {threads} spade_output_{wildcards.subsample}")
       # 2015.12.01 Edited to use trimmed reads directly
-      shell("bash {code_dir}/snakehelper_spadeAssembly.sh {scratch} {input_on_scratch} {output_on_scratch[0]} {output\
-_on_scratch[1]} {tool_dir} {params.mem} {threads} spade_output_{wildcards.subsample}") 
+      # 2017.01.31 Edited so that kmer is now a variable string
+      shell("""
+        echo {scratch}; cd {scratch}
+        source activate {python3_env}
+        spadesMemory=$( echo {params.mem} | rev | cut -c 4- | rev )
+        echo 'memory used in GB is: '$spadesMemory
+        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( wc -l < {input_on_scratch[0]}) / 4 ))
+        cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+        echo -e 'Starting Assembly: Number of single end reads is: \t'$(( $( wc -l < single.fastq ) / 4 ))
+        time spades.py -k {params.kmer} -t {threads} --sc --careful -m $spadesMemory -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -s single.fastq -o spade_output_{wildcards.subsample}
+        cp spade_output_{wildcards.subsample}/contigs.fasta {output_on_scratch[0]}
+        cp spade_output_{wildcards.subsample}/scaffolds.fasta {output_on_scratch[1]}
+        mv spade_output_{wildcards.subsample}/corrected/*1.*.00.0_0.cor.fastq.gz {output[2]}
+        mv spade_output_{wildcards.subsample}/corrected/*2.*.00.0_0.cor.fastq.gz {output[3]}
+        mv spade_output_{wildcards.subsample}/corrected/*unpaired.00.0_0.cor.fastq.gz {output[4]}
+        mv spade_output_{wildcards.subsample}/spades.log {output[5]}
+        mv spade_output_{wildcards.subsample}/params.txt {output[6]}
+        echo; ls; date
+        source deactivate
+        """) 
       # 2016.09.23 Could think about commenting the following line out.
       # shell("rsync -avrP {scratch}/spade_output_{wildcards.subsample} {wildcards.subsample}/")
       # edit contig names and copy back file
@@ -74,86 +96,80 @@ _on_scratch[1]} {tool_dir} {params.mem} {threads} spade_output_{wildcards.subsam
                   a = outfile.write('>SubSample_'+wildcards.subsample+'_'+line[1:])
               else:
                   a = outfile.write(line)
-      # Copy corrected P1 and P2 reads from scratch (unpaired reads are left)
-      # These two files are in .fastq.gz format after copying
-      # The names of these two files depend on the input files
-      shell("""cp {scratch}/correctedreads1.fastq.gz {output[2]}
-        cp {scratch}/correctedreads2.fastq.gz {output[3]}
-        cp {scratch}/correctedreads_unpaired.fastq.gz {output[4]}
-        cp {scratch}/spade_output_{wildcards.subsample}/spades.log {output[5]}
-        cp {scratch}/spade_output_{wildcards.subsample}/params.txt {output[6]}""")
+      print('Assembly Completed')
     else:
       print('Input files have size 0')
 
 
 rule align_to_assembly:
-  # The output of this rule can be made more informative by including coverage of each contigs.
+  # The output of this rule can be made more informative by including contig cov.
+  # 2017.02.01 Changed to use corrected reads for alignment, bowtie2 handles .gz
   input: 
-    "{subsample}/P1.{subsample}.fastq", 
-    "{subsample}/P2.{subsample}.fastq", 
+    # "{subsample}/P1.{subsample}.fastq", 
+    # "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/P1_corrected.{subsample}.fastq.gz", 
+    "{subsample}/P2_corrected.{subsample}.fastq.gz",
+    "{subsample}/S_corrected.{subsample}.fastq.gz",
     "{subsample}/contigs.{subsample}.fasta"
-  output: "{subsample}/contigCoverage.{subsample}.cnt"
+  output:
+    "{subsample}/leftover_reads_P1.{subsample}.fastq",
+    "{subsample}/leftover_reads_P2.{subsample}.fastq",
+    "{subsample}/leftover_reads_S.{subsample}.fastq"
   params: 
-    name="Bowtie2Align", 
+    name="subsample_remove_reads",
+    qos="normal",
+    time="1-10:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
-    mem=parameters.ix['subsample_bowtie2_memory','entry']
+    mem=parameters.ix['subsample_bowtie2_memory','entry'],
+    contig_thresh=parameters.ix['subsample_contig_thresh','entry']
   threads: int(parameters.ix['subsample_bowtie2_thread','entry'])
-  version: "1.0"
+  version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to contigs
-    shell("bash {code_dir}/snakehelper_bowtie2align2contig.sh {scratch} {input_on_scratch} \
-      {output_on_scratch} {tool_dir} {threads} {wildcards.subsample}")
+    shell("""
+      echo {scratch}; cd {scratch}; date
+      source activate {python3_env}
+      echo 'Building bowtie2 indices'
+      bowtie2-build --quiet --threads {threads} -f {input_on_scratch[3]} subsampleContigs
+      date; echo 'Aligning reads using bowtie2'
+      bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --un leftover --un-conc leftover -x subsampleContigs -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignedResults.sam
+      mv leftover/un-conc-mate.1 {output_on_scratch[0]}
+      mv leftover/un-conc-mate.2 {output_on_scratch[1]}
+      mv leftover/un-seqs {output_on_scratch[2]}
+      source deactivate
+      """)
     cp_from_scratch(output, scratch)
 
 
-rule general_quast:
+rule subsample_quast:
   input: "{folder}/contigs.{k}.fasta"
   output: "{folder}/quast_report.{k}.txt"
   params: 
-    name="general_quast", 
-    partition="general", 
-    mem="5000"
-  threads: 1
-  version: "1.0"
+    name="subsample_quast",
+    qos="normal",
+    time="30:00",
+    partition="normal", 
+    mem="8000",
+    contig_thresh=int(parameters.ix['biosample_contig_thresh','entry'])
+  threads: 2
+  version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    output_on_scratch = names_on_scratch(output, scratch)
-    input_on_scratch = names_on_scratch(input, scratch)
-    cp_to_scratch(input, scratch)
-    # Performing Quast
-    shell("bash {code_dir}/snakehelper_quast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {threads}")
-    cp_from_scratch(output, scratch)
+    scratch = os.environ["LOCAL_SCRATCH"]
+    # Performing Quast v4.4 with biosample_contig_thresh value
+    # quast is in the anaconda2 env, not quast.py just quast
+    # could use options --plots-format svg --gene-finding --meta
+    shell("""
+      echo {scratch}; cd {scratch}
+      source activate {python2_env}
+      quast -m {params.contig_thresh} -t {threads} -o subsample_quast_output {input}
+      mv subsample_quast_output/report.txt {output}
+      source deactivate
+      """)
 
-
-rule subsample_BLAST:
-  input: "{subsample}/contigs.{subsample}.fasta"
-  output: "{subsample}/BlastResults.{subsample}.txt"
-  params: 
-    name="subsample_blast_results", 
-    partition=parameters.ix['blast_partition','entry'], 
-    mem=parameters.ix['blast_memory','entry'],
-    contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: int(parameters.ix['blast_threads','entry'])
-  version: "1.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    cp_to_scratch(input, scratch)
-    # Blast contigs
-    shell("bash {code_dir}/snakehelper_blast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {code_dir} {threads} {params.contig_thresh}")
-    assert(os.path.isfile(output_on_scratch[0])),"Blast results file does not exist."
-    # if file_empty() returns 0 it actually means file is empty
-    if not file_empty([output_on_scratch[0]]):
-        print('Blast results is empty.')
-    #assert(file_empty([output_on_scratch[0]])),"Blast results is empty."
-    cp_from_scratch(output, scratch)
-
-
+    

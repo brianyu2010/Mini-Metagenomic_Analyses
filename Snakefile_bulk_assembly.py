@@ -6,6 +6,7 @@
 #
 # 2017.01.13 Added metaspade assembly in addition
 #            megahit assembly
+# 2017.02.01 Edited to work with Sherlock
 ###############################################
 
 # rules
@@ -24,14 +25,17 @@ rule megahit_assembly:
   output: 
     "{subsample}/megahit_contigs.{subsample}.fasta" 
   params: 
-    name="bulk_megahit_assembly", 
+    name="bulk_megahit_assembly",
+    qos="bigmem",
+    time="16:00:00",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
-    mem=parameters.ix['subsample_assembly_memory','entry']
+    mem=parameters.ix['subsample_assembly_memory','entry'],
+    kmer=parameters.ix['bulk_megahit_kmerlist','entry']
   threads: int(parameters.ix['subsample_assembly_thread','entry'])
-  version: "2.0"
+  version: "3.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     # perform file size check
     file_size_check = 1;
@@ -47,12 +51,36 @@ rule megahit_assembly:
       # shell("if [ -d {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample} ]; then rm -rf {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample}; fi") 
       # now do assembly, megahit_output_folder is kept on scratch
       # shell("bash {code_dir}/snakehelper_megahitAssembly.sh {scratch} {input_on_scratch} {resources_dir} {params.mem} {threads} {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample}")
-      shell("bash {code_dir}/snakehelper_megahitAssembly.sh {scratch} {input_on_scratch} {resources_dir} {params.mem} {threads} megahit_output_{wildcards.subsample}")
-      shell("pwd") # This is to check where I am
-      # megahit is the prefix to contig file so OUT_DIR/megahit.contigs.fa
-      # shell("cp {wildcards.subsample}/megahit_output_{wildcards.subsample}/megahit.contigs.fa {output[0]}")
-      # Now just copy the megahit.contigs.fa file back from scratch megahit_output folder
-      shell("cp {scratch}/megahit_output_{wildcards.subsample}/megahit.contigs.fa {output[0]}")
+      shell("""
+        echo {scratch}; cd {scratch}; date; pwd; echo
+        source activate {python2_env}
+        mem=$( echo {params.mem} )000000
+        echo 'memory used in Bytes is '$mem 
+        megahit_output_dir=megahit_output_{wildcards.subsample}
+        source activate {python3_env}
+        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input_on_scratch[0]| | wc -l ) / 4 ))
+        cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+        echo -e 'Starting Assembly: Number of single end reads is: \t'$(( $( wc -l < single.fastq) / 4 ))
+        if [ -d $megahit_output_dir ]
+        then
+        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 --continue -1 {input_on_scratch[0]} {input_on_scratch[1]} -r single.fastq -o $megahit_output_dir --out-prefix megahit
+        else
+        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 -1 {input_on_scratch[0]} {input_on_scratch[1]} -r single.fastq -o $megahit_output_dir --out-prefix megahit
+        fi
+        date
+        cp $megahit_output_dir/megahit.contigs.fa {output[0]}
+        echo 'Assembly Completed'
+        source deactivate
+        """)
+      # Performing Quast
+      shell("""
+        echo 'Performing metaquast'
+        date; pwd; echo
+        source activate {python2_env}
+        quast_output_dir=metaquast_megahit
+        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
+        source deactivate
+        """)
       assert(file_empty(output)),"The contig file is empty."
     else:
       print('Input files have size 0')
@@ -69,14 +97,17 @@ rule metaSPAdes_assembly:
   output: 
     "{subsample}/metaSPAdes_contigs.{subsample}.fasta" 
   params: 
-    name="bulk_metaSPAdes_assembly", 
+    name="bulk_metaSPAdes_assembly",
+    qos="normal",
+    time="3-0",
     partition=parameters.ix['biosample_assembly_partition','entry'], 
-    mem=parameters.ix['biosample_assembly_memory','entry']
+    mem=parameters.ix['biosample_assembly_memory','entry'],
+    kmer=parameters.ix['bulk_spades_kmerlist','entry']
   threads: int(parameters.ix['biosample_assembly_thread','entry'])
-  version: "2.0"
+  version: "3.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     # perform file size check
     file_size_check = 1;
@@ -88,15 +119,40 @@ rule metaSPAdes_assembly:
       cp_to_scratch(input,scratch)
       # Assembly using metaSPAdes (for shotgun metagenomes). 
       # now do assembly, keep output folder in scratch
-      shell("bash {code_dir}/snakehelper_metaSpadesAssembly.sh {scratch} {input_on_scratch} {code_dir} {tool_dir} {params.mem} {threads} metaSPAdes_output_{wildcards.subsample}")
-      shell("pwd") # This is to check where I am
-      # megahit is the prefix to contig file so OUT_DIR/megahit.contigs.fa
-      shell("cp {scratch}/metaSPAdes_output_{wildcards.subsample}/contigs.fasta {output[0]}")
+      shell("""
+        echo {scratch}; cd {scratch}; date; pwd; echo
+        source activate {python2_env}
+        mem=$( echo {params.mem} | rev | cut -c 4- | rev ) 
+        echo 'memory used in Gb is '$mem 
+        spades_output_dir=metaSPAdes_output_{wildcards.subsample}
+        source activate {python3_env}
+        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input_on_scratch[0]| | wc -l ) / 4 ))
+        if [ -d $spades_output_dir ]
+        then
+        time metaspades.py -k {params.kmer} -t {threads} --continue -m $mem -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -o $spades_output_dir
+        else
+        time metaspades.py -k {params.kmer} -t {threads} -m $mem -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -o $spades_output_dir
+        fi
+        date
+        cp $spades_output_dir/contigs.fasta {output}
+        echo 'Assembly Completed'
+        source deactivate
+        """)
+      # Performing Quast
+      shell("""
+        echo 'Performing metaquast'
+        date; pwd; echo
+        source activate {python2_env}
+        quast_output_dir=metaquast_metaSPAdes
+        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
+        source deactivate
+        """)
       assert(file_empty(output)),"The contig file is empty."
     else:
       print('Input files have size 0')
 
 
+# This rule has not be updated to work with sherlock yet!!!!!!!!!!
 rule align_to_assembly:
   # The output of this rule can be made more informative by including coverage of each contigs.
   input: 
@@ -105,90 +161,22 @@ rule align_to_assembly:
     "{subsample}/contigs.{subsample}.fasta"
   output: "{subsample}/contigCoverage.{subsample}.cnt"
   params: 
-    name="Bowtie2Align", 
+    name="bulkBowtie2Align",
+    qos="normal",
+    time="23:59:59",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry']
   threads: int(parameters.ix['subsample_bowtie2_thread','entry'])
-  version: "1.0"
+  version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = get_scratch(False)
+    scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to contigs
     shell("bash {code_dir}/snakehelper_bowtie2align2contig.sh {scratch} {input_on_scratch} \
       {output_on_scratch} {tool_dir} {threads} {wildcards.subsample}")
-    cp_from_scratch(output, scratch)
-
-
-rule metaSPAdes_quast:
-  input: 
-    "{folder}/metaSPAdes_contigs.{k}.fasta"
-  output: 
-    "{folder}/metaSPAdes_quast_report.{k}.txt"
-  params: 
-    name="metaSPAdes_quast", 
-    partition="general", 
-    mem="5000"
-  threads: 1
-  version: "1.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    output_on_scratch = names_on_scratch(output, scratch)
-    input_on_scratch = names_on_scratch(input, scratch)
-    cp_to_scratch(input, scratch)
-    # Performing Quast
-    shell("bash {code_dir}/snakehelper_quast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {threads}")
-    cp_from_scratch(output, scratch)
-
-
-rule megahit_quast:
-  input: 
-    "{folder}/megahit_contigs.{k}.fasta"
-  output: 
-    "{folder}/megahit_quast_report.{k}.txt"
-  params: 
-    name="megahit_quast", 
-    partition="general", 
-    mem="5000"
-  threads: 1
-  version: "1.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    output_on_scratch = names_on_scratch(output, scratch)
-    input_on_scratch = names_on_scratch(input, scratch)
-    cp_to_scratch(input, scratch)
-    # Performing Quast
-    shell("bash {code_dir}/snakehelper_quast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {threads}")
-    cp_from_scratch(output, scratch)
-
-
-rule subsample_BLAST:
-  input: "{subsample}/contigs.{subsample}.fasta"
-  output: "{subsample}/BlastResults.{subsample}.txt"
-  params: 
-    name="subsample_blast_results", 
-    partition=parameters.ix['blast_partition','entry'], 
-    mem=parameters.ix['blast_memory','entry'],
-    contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: int(parameters.ix['blast_threads','entry'])
-  version: "1.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = get_scratch(False)
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    cp_to_scratch(input, scratch)
-    # Blast contigs
-    shell("bash {code_dir}/snakehelper_blast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {code_dir} {threads} {params.contig_thresh}")
-    assert(os.path.isfile(output_on_scratch[0])),"Blast results file does not exist."
-    # if file_empty() returns 0 it actually means file is empty
-    if not file_empty([output_on_scratch[0]]):
-        print('Blast results is empty.')
-    #assert(file_empty([output_on_scratch[0]])),"Blast results is empty."
     cp_from_scratch(output, scratch)
 
 

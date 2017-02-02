@@ -1,0 +1,67 @@
+Conda Environment Setup Process
+
+Revision History
+2017.02.01 Brian Yu: Created
+
+********************************************************************
+Note: these packages cannot be installed via Conda yet
+-- Maxbin
+-- Metabat
+-- Prokka
+********************************************************************
+
+
+Download Miniconda3-latest-Linux-x86_64.sh from website
+
+Install conda environment
+>> bash Miniconda3-latest-Linux-x86_64.sh
+Specify root directory (e.g. ~/conda3/)
+Export root directory to PATH in ~/.bashrc
+
+Update conda
+>> conda update conda
+
+Setup python 3 environment
+>> conda create --name py3env python=3.5 anaconda
+
+Activate python 3 environment
+>> source activate py3env
+
+Update python
+>> conda update python
+
+Configure conda channels
+>> conda config --prepend channels defaults
+>> conda config --prepend channels conda-forge
+>> conda config --prepend channels bioconda
+>> conda config --append channels biobuilds
+>> conda config --append channels etetoolkit
+
+Install all bioinformatic packages compatible with python 3
+>> conda install -n py3env spades=3.10.0 megahit bowtie2 trimmomatic fastqc blast bcftools=1.3.1 samtools=1.3.1 vcftools=0.1.14 fastx-toolkit fastx-toolkit=0.0.14 snakemake ete3 prodigal fasttree hmmer raxml numpy scipy pandas matplotlib biopython
+
+Deactivate python 3 environment
+>> conda deactivate py3env
+
+Create python 2 environment
+>> conda create -n py2env python=2.7 anaconda
+
+Activate python 3 environment
+>> source activate py2env
+
+Update python
+>> conda update python
+
+Configure conda channels
+>> conda config --prepend channels defaults
+>> conda config --prepend channels conda-forge
+>> conda config --prepend channels bioconda
+>> conda config --append channels biobuilds
+>> conda config --append channels etetoolkit
+
+Install bioinformatic tools that are not compatible with python 3
+>> conda install -n py2env quast checkm-genome numpy scipy pandas matplotlib biopython
+
+Deactivate python 2 environment
+>> conda deactivate py2env
+
