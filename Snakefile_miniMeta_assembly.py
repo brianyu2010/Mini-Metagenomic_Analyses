@@ -23,7 +23,30 @@ rule combine_threshold_subsample_contigs:
   input:
     expand("{subsample}/contigs.{subsample}.fasta", subsample=subsampleIDs)
   output:
-    "Combined_Analysis/subsample_contigs.{id}.fasta",
+    "Combined_Analysis/subsample_contigs.{id}.fasta"
+  params:
+    name="combine_threshold_subsample_contigs",
+    qos="normal",
+    time="1:00:00",
+    partition="normal",
+    mem="4000", # don't change this
+    contig_thresh=parameters.ix['subsample_contig_thresh','entry']
+  threads: 1
+  version: "2.0"
+  run:
+    # Manage files and obtain scratch location
+    scratch = os.environ["LOCAL_SCRATCH"]
+    shell("""
+      source activate {python2_env}
+      cat {input} > {scratch}/combined_contigs.fasta
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {scratch}/combined_contigs.fasta {output}
+      """)
+
+
+rule create_subsampleContigIndex:
+  input:
+    "Combined_Analysis/subsample_contigs.{id}.fasta"
+  output:
     "Combined_Analysis/subsample_bowtie_{id}.1.bt2l",
     "Combined_Analysis/subsample_bowtie_{id}.2.bt2l",
     "Combined_Analysis/subsample_bowtie_{id}.3.bt2l",
@@ -31,7 +54,7 @@ rule combine_threshold_subsample_contigs:
     "Combined_Analysis/subsample_bowtie_{id}.rev.1.bt2l",
     "Combined_Analysis/subsample_bowtie_{id}.rev.2.bt2l"
   params:
-    name="combine_threshold_subsample_contigs",
+    name="create_subsampleContigIndex",
     qos="normal",
     time="24:00:00",
     partition="normal",
@@ -48,21 +71,20 @@ rule combine_threshold_subsample_contigs:
     # Performing contig trimming and bowtie2-build
     # The variable work_directory is used in this part
     shell("""
-      date; source activate {python2_env}
-      cd {scratch};
-      cat {input_on_scratch} > combined_contigs.fasta
-      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} combined_contigs.fasta {output_on_scratch[0]}
-      python {code_dir}/process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {output_on_scratch[0]} trimmed_subsample_contigs.fasta
+      basename=$(echo {output[0]} | cut -d/ -f2 | cut -d. -f1)
+      echo $basename
+      date; source activate {python2_env}; cd {scratch}
+      python {code_dir}/process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {input_on_scratch} trimmed_subsample_contigs.fasta
       source activate {python3_env}
-      bowtie2-build --quiet --large-index --threads {threads} -f trimmed_subsample_contigs.fasta subsample_bowtie_{wildcards.id}
+      bowtie2-build --quiet --large-index --threads {threads} -f trimmed_subsample_contigs.fasta $basename
       source deactivate; date
       """)
     # Move the rest of the reads back
     cp_from_scratch(output, scratch)
 
-"""
-# This rule also needs pre-built bowtie index, not part of input
-rule remove_aligned_reads:
+
+# This rule also needs pre-built bowtie index
+rule remove_aligned_reads_from_subsampleContigs:
   input:
     "{subsample}/P1_corrected.{subsample}.fastq.gz",
     "{subsample}/P2_corrected.{subsample}.fastq.gz",
@@ -74,11 +96,11 @@ rule remove_aligned_reads:
     expand("Combined_Analysis/subsample_bowtie_{id}.rev.1.bt2l", id=biosample),
     expand("Combined_Analysis/subsample_bowtie_{id}.rev.2.bt2l", id=biosample)
   output:
-    "{subsample}/leftover_reads_P1.{subsample}.fastq",
-    "{subsample}/leftover_reads_P2.{subsample}.fastq",
-    "{subsample}/leftover_reads_S.{subsample}.fastq"
+    "{subsample}/leftover_total_reads_P1.{subsample}.fastq",
+    "{subsample}/leftover_total_reads_P2.{subsample}.fastq",
+    "{subsample}/leftover_total_reads_S.{subsample}.fastq"
   params:
-    name="remove_aligned_reads",
+    name="remove_aligned_reads_from_subsampleContigs",
     qos="normal",
     time="12:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
@@ -94,35 +116,39 @@ rule remove_aligned_reads:
     cp_to_scratch(input, scratch)
     # Performing bowtie2 alignment --time --phred33 --un <path> --un-conc <path>
     # bowtie2 can handle fastq.gz files
-    shell(""
+    shell("""
       date; source activate {python3_env}
       basename=$(echo {input[3]} | cut -d/ -f2 | cut -d. -f1)
       echo $basename
       cd {scratch}
       echo 'Using end-to-end alignment to remove reads'
-      bowtie2 --time --phred33 --fast -I 100 -X 2000 -p {threads} --un leftover --un-conc leftover -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignResults.sam
-      mv leftover/un-conc-mate.1 {output_on_scratch[0]}
-      mv leftover/un-conc-mate.2 {output_on_scratch[1]}
-      mv leftover/un-seqs {output_on_scratch[2]}
+      bowtie2 --time --phred33 --fast -I 100 -X 2000 -p {threads} --un leftoverSingle --un-conc leftoverReads -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignResults.sam
+      mv leftoverReads.1 {output_on_scratch[0]}
+      mv leftoverReads.2 {output_on_scratch[1]}
+      mv leftoverSingle {output_on_scratch[2]}
       source deactivate
-      "")
+      """)
     # Move the rest of the reads back
     cp_from_scratch(output, scratch)
-"""
+
 
 
 rule minimeta_spade_assembly:
   # order of the inputs are paired1 paired2 single1 single2
   # 2017.01.12 input is edited to use YAML file and combined subsample contigs
   input: 
+    #expand("{subsample}/leftover_total_reads_P1.{subsample}.fastq", subsample=subsampleIDs),
+    #expand("{subsample}/leftover_total_reads_P2.{subsample}.fastq", subsample=subsampleIDs),
+    #expand("{subsample}/leftover_total_reads_S.{subsample}.fastq", subsample=subsampleIDs),
     expand("{subsample}/leftover_reads_P1.{subsample}.fastq", subsample=subsampleIDs),
     expand("{subsample}/leftover_reads_P2.{subsample}.fastq", subsample=subsampleIDs),
     expand("{subsample}/leftover_reads_S.{subsample}.fastq", subsample=subsampleIDs),
     expand("Combined_Analysis/subsample_contigs.{id}.fasta", id=biosample)
   output: # metaquast does not require output file, just output dir
-    "miniMetaAssembly_reads.yaml", # in the root work_directory because of spades paths
+    "miniMetaAssembly_reads.{id}.yaml", # in the root work_directory because of spades paths
     "Combined_Analysis/minimeta_contigs.{id}.fasta", 
-    "Combined_Analysis/minimeta_scaffolds.{id}.fasta" 
+    "Combined_Analysis/minimeta_scaffolds.{id}.fasta",
+    "Combined_Analysis/quast_report_minimeta.{id}.txt"
   params:    
     name="minimeta_spade_assembly",
     qos="normal",
@@ -136,7 +162,6 @@ rule minimeta_spade_assembly:
   run:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
-    print(work_directory)
     # creating a text file to pass to SPAdes
     numfiles = int((len(input)-1)/3)
     print(numfiles)
@@ -189,6 +214,8 @@ rule minimeta_spade_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
+      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)
     assert(file_empty(output)),"Either the contig or scaffold file is empty."

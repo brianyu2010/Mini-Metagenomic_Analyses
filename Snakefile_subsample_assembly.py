@@ -32,7 +32,7 @@ rule subsample_spade_assembly:
   params: 
     name="subsample_spade_assembly",
     qos="normal",
-    time="23:00:00", # means 2 days
+    time="23:59:59",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
     mem=parameters.ix['subsample_assembly_memory','entry'],
     kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
@@ -65,43 +65,45 @@ rule subsample_spade_assembly:
         echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( wc -l < {input_on_scratch[0]}) / 4 ))
         cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
         echo -e 'Starting Assembly: Number of single end reads is: \t'$(( $( wc -l < single.fastq ) / 4 ))
-        time spades.py -k {params.kmer} -t {threads} --sc --careful -m $spadesMemory -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -s single.fastq -o spade_output_{wildcards.subsample}
-        cp spade_output_{wildcards.subsample}/contigs.fasta {output_on_scratch[0]}
-        cp spade_output_{wildcards.subsample}/scaffolds.fasta {output_on_scratch[1]}
-        mv spade_output_{wildcards.subsample}/corrected/*1.*.00.0_0.cor.fastq.gz {output[2]}
-        mv spade_output_{wildcards.subsample}/corrected/*2.*.00.0_0.cor.fastq.gz {output[3]}
-        mv spade_output_{wildcards.subsample}/corrected/*unpaired.00.0_0.cor.fastq.gz {output[4]}
-        mv spade_output_{wildcards.subsample}/spades.log {output[5]}
-        mv spade_output_{wildcards.subsample}/params.txt {output[6]}
+        subsample_spades_dir=spades_output_{wildcards.subsample}
+        time spades.py -k {params.kmer} -t {threads} --sc --careful -m $spadesMemory -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -s single.fastq -o $subsample_spades_dir
+        cp $subsample_spades_dir/contigs.fasta {output_on_scratch[0]}
+        cp $subsample_spades_dir/scaffolds.fasta {output_on_scratch[1]}
+        mv $subsample_spades_dir/corrected/*1.*.00.0_0.cor.fastq.gz {output_on_scratch[2]}
+        mv $subsample_spades_dir/corrected/*2.*.00.0_0.cor.fastq.gz {output_on_scratch[3]}
+        mv $subsample_spades_dir/corrected/*unpaired.00.0_0.cor.fastq.gz {output_on_scratch[4]}
+        mv $subsample_spades_dir/spades.log {output_on_scratch[5]}
+        mv $subsample_spades_dir/params.txt {output_on_scratch[6]}
         echo; ls; date
-        source deactivate
-        """) 
+        # source deactivate
+        """)
+      cp_from_scratch(output[2:], scratch)
       # 2016.09.23 Could think about commenting the following line out.
       # shell("rsync -avrP {scratch}/spade_output_{wildcards.subsample} {wildcards.subsample}/")
       # edit contig names and copy back file
       # first check if the contig and scaffolds are empty
       assert(file_empty(output_on_scratch[0:2])),"Either contig or scaffold files from SPAdes is empty."
       with open(output_on_scratch[0],'r') as infile, open(output[0],'w') as outfile:
-          for line in infile:
-              if '>' in line:
-                  # Basically all the contigs from the beginning will have
-                  # the same naming schemes
-                  a = outfile.write('>SubSample_'+wildcards.subsample+'_'+line[1:])
-              else:
-                  a = outfile.write(line)
+        for line in infile:
+          if '>' in line:
+            # Basically all the contigs from the beginning will have
+            # the same naming schemes
+            a = outfile.write('>SubSample_'+wildcards.subsample+'_'+line[1:])
+          else:
+            a = outfile.write(line)
       # edit scaffold names and copy back file
       with open(output_on_scratch[1],'r') as infile, open(output[1],'w') as outfile:
-          for line in infile:
-              if '>' in line:
-                  a = outfile.write('>SubSample_'+wildcards.subsample+'_'+line[1:])
-              else:
-                  a = outfile.write(line)
+        for line in infile:
+          if '>' in line:
+            a = outfile.write('>SubSample_'+wildcards.subsample+'_'+line[1:])
+          else:
+            a = outfile.write(line)
       print('Assembly Completed')
     else:
       print('Input files have size 0')
 
 
-rule align_to_assembly:
+rule subsample_remove_reads:
   # The output of this rule can be made more informative by including contig cov.
   # 2017.02.01 Changed to use corrected reads for alignment, bowtie2 handles .gz
   input: 
@@ -118,7 +120,7 @@ rule align_to_assembly:
   params: 
     name="subsample_remove_reads",
     qos="normal",
-    time="1-10:00:00",
+    time="12:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
@@ -133,14 +135,16 @@ rule align_to_assembly:
     # Bowtie2 Alignment of reads back to contigs
     shell("""
       echo {scratch}; cd {scratch}; date
+      source activate {python2_env}
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input_on_scratch[3]} trimmed_subsample_contigs.fasta
       source activate {python3_env}
       echo 'Building bowtie2 indices'
-      bowtie2-build --quiet --threads {threads} -f {input_on_scratch[3]} subsampleContigs
+      bowtie2-build --quiet --threads {threads} -f trimmed_subsample_contigs.fasta subsampleContigs
       date; echo 'Aligning reads using bowtie2'
-      bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --un leftover --un-conc leftover -x subsampleContigs -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignedResults.sam
-      mv leftover/un-conc-mate.1 {output_on_scratch[0]}
-      mv leftover/un-conc-mate.2 {output_on_scratch[1]}
-      mv leftover/un-seqs {output_on_scratch[2]}
+      bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --un leftoverReadsSingle --un-conc leftoverReads -x subsampleContigs -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignedResults.sam
+      mv leftoverReads.1 {output_on_scratch[0]}
+      mv leftoverReads.2 {output_on_scratch[1]}
+      mv leftoverReadsSingle {output_on_scratch[2]}
       source deactivate
       """)
     cp_from_scratch(output, scratch)
@@ -161,15 +165,19 @@ rule subsample_quast:
   run:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
+    input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
+    cp_to_scratch(input, scratch)
     # Performing Quast v4.4 with biosample_contig_thresh value
     # quast is in the anaconda2 env, not quast.py just quast
     # could use options --plots-format svg --gene-finding --meta
     shell("""
       echo {scratch}; cd {scratch}
       source activate {python2_env}
-      quast -m {params.contig_thresh} -t {threads} -o subsample_quast_output {input}
-      mv subsample_quast_output/report.txt {output}
+      quast -m {params.contig_thresh} -t {threads} -o subsample_quast_output {input_on_scratch}
+      mv subsample_quast_output/report.txt {output_on_scratch}
       source deactivate
       """)
+    cp_from_scratch(output, scratch)
 
     

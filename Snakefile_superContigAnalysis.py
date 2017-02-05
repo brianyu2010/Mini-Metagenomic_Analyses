@@ -62,36 +62,67 @@ def merge_superContig_alignment_results(input, output):
       t = f.write(key + '\t' + '\t'.join([str(x) for x in superContig_coverage[key]]) + '\n')
 
 
-      
-rule merge_superContig_Alignment:
-  input: 
-    "Combined_Analysis/super_contigs.{id}.fasta",
-    expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs)
-  output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
-  params:
-    name="merge_superContig_Alignment",
-    qos="normal",
-    time="2:00:00",
-    partition="normal",
-    mem="4000", # don't change
-    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 1
-  version: "2.0"
-  run: 
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
-    cp_to_scratch(input, scratch)
-    # Perform organization of contigs    
-    shell("""
-      source activate {python2_env}
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
-      """)
-    input_on_scratch[0] = contig_on_scratch[0]
-    merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
-    cp_from_scratch(output, scratch)
+if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == 'y':
+  rule merge_superContig_alignment_withBulk:
+    input: 
+      "Combined_Analysis/super_contigs.{id}.fasta",
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs),
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
+    output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
+    params:
+      name="merge_superContig_alignment_withBulk",
+      qos="normal",
+      time="2:00:00",
+      partition="normal",
+      mem="4000", # don't change
+      contig_thresh=parameters.ix['biosample_contig_thresh','entry']
+    threads: 1
+    version: "2.0"
+    run: 
+      # Managing files and obtain scratch location
+      scratch = os.environ["LOCAL_SCRATCH"]
+      input_on_scratch = names_on_scratch(input, scratch)
+      output_on_scratch = names_on_scratch(output, scratch)
+      contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
+      cp_to_scratch(input, scratch)
+      # Perform organization of contigs    
+      shell("""
+        source activate {python2_env}
+        python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
+        """)
+      input_on_scratch[0] = contig_on_scratch[0]
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      cp_from_scratch(output, scratch)
+else:
+  rule merge_superContig_alignment_miniMetaOnly:
+    input: 
+      "Combined_Analysis/super_contigs.{id}.fasta",
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs)
+    output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
+    params:
+      name="merge_superContig_alignment_miniMetaOnly",
+      qos="normal",
+      time="2:00:00",
+      partition="normal",
+      mem="4000", # don't change
+      contig_thresh=parameters.ix['biosample_contig_thresh','entry']
+    threads: 1
+    version: "2.0"
+    run: 
+      # Managing files and obtain scratch location
+      scratch = os.environ["LOCAL_SCRATCH"]
+      input_on_scratch = names_on_scratch(input, scratch)
+      output_on_scratch = names_on_scratch(output, scratch)
+      contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
+      cp_to_scratch(input, scratch)
+      # Perform organization of contigs    
+      shell("""
+        source activate {python2_env}
+        python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
+        """)
+      input_on_scratch[0] = contig_on_scratch[0]
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      cp_from_scratch(output, scratch)
 
 
 ###############################################
@@ -104,12 +135,63 @@ rule merge_superContig_Alignment:
 # 2016.08.30 Created Brian Yu
 ###############################################   
 
+
+rule make_supercontig_indices:
+  input:
+    "Combined_Analysis/super_contigs.{id}.fasta"
+  output:
+    "Combined_Analysis/superContigIndex_{id}.1.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.2.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.3.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.4.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.rev.1.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.rev.2.bt2l"
+  params:
+    name="make_supercontig_indices",
+    qos="normal",
+    time="24:00:00",
+    partition="normal",
+    mem="64000", # don't change this
+    contig_thresh=parameters.ix['subsample_contig_thresh','entry']
+  threads: 16
+  version: "2.0"
+  run:
+    # Manage files and obtain scratch location
+    scratch = os.environ["LOCAL_SCRATCH"]
+    input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
+    cp_to_scratch(input, scratch)
+    # Performing contig trimming and bowtie2-build
+    # The variable work_directory is used in this part
+    shell("""
+      basename=$(echo {output[0]} | cut -d/ -f2 | cut -d. -f1)
+      echo $basename
+      date; cd {scratch}; source activate {python2_env}
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input_on_scratch} threshold_super_contigs.fasta
+      source activate {python3_env}
+      bowtie2-build --quiet --large-index --threads {threads} -f threshold_super_contigs.fasta $basename
+      source deactivate; date
+      """)
+    # Move the rest of the reads back
+    cp_from_scratch(output, scratch)
+
+
+
 rule subsampleSuperContigPileup:
   input: 
     "{subsample}/P1.{subsample}.fastq", 
-    "{subsample}/P2.{subsample}.fastq", 
-    expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample)
-  output: 
+    "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/S1.{subsample}.fastq",
+    "{subsample}/S2.{subsample}.fastq",
+    expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.1.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.2.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.3.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.4.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l", id=biosample)
+    # expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample)
+  output:
     temp("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt"),
     temp("Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam"),
     temp("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt")
@@ -130,21 +212,22 @@ rule subsampleSuperContigPileup:
     cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to super_contigs (contigs with new names)
     # This is perhaps not the best way, use the line above instead
-    # awk 'a1==$1 {a2+=$4; next} {print a1,"\t", a2; a1=$1; a2=$4} END {print a1,"\t",a2}' alignResults.pile > {output_on_scratch[2]}  
+    # awk 'a1==$1 {a2+=$4; next} {print a1,"\t", a2; a1=$1; a2=$4} END {print a1,"\t",a2}' alignResults.pile > {output_on_scratch[2]}
     shell("""
+      basename=$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
       echo {scratch}; cd {scratch}
       source activate {python2_env}
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[2]} temp.fasta
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input_on_scratch[4]} threshold_super_contigs.fasta
       source activate {python3_env}
-      bowtie2-build --quiet -f temp.fasta spadeContigs
-      bowtie2 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x spadeContigs -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -S alignResults.sam
+      cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+      bowtie2 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
       samtools view -b -o alignResults.bam alignResults.sam
       samtools sort -o alignResults_sorted.bam alignResults.bam
       cp alignResults_sorted.bam {output_on_scratch[1]}
       samtools index alignResults_sorted.bam
-      samtools mpileup -f temp.fasta -o alignResults.pile alignResults_sorted.bam 
+      samtools mpileup -f threshold_super_contigs.fasta -o alignResults.pile alignResults_sorted.bam 
       awk '$4>=5 {{print}}' alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output_on_scratch[0]}
-      echo nextLineIsTheProblem
+      # echo nextLineIsTheProblem
       awk '$4>=1 {{print}}' alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output_on_scratch[2]}
       echo Process_Completed
       """)
@@ -162,7 +245,7 @@ rule VCFgenerate:
   params:
     name="VCFgenerate",
     qos="normal",
-    time="2-0",
+    time="1-0",
     partition="normal",
     mem="64000",
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -191,35 +274,69 @@ rule VCFgenerate:
     cp_from_scratch(output, scratch)
   
 
-
-rule subsampleGenomeSize:
-  input: 
-    "Combined_Analysis/super_contigs.{id}.fasta",
-    expand("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt", subsample=subsampleIDs)
-  output: 
-    "Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt"
-  params:
-    name="subsampleGenomeSize",
-    qos="normal",
-    time="5:00:00",
-    partition="normal",
-    mem="4000", # don't change
-    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 1
-  version: "2.0"
-  run: 
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
-    cp_to_scratch(input, scratch)
-    # Perform organization of contigs    
-    shell("""
-      source activate {python2_env}
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
-      """)
-    input_on_scratch[0] = contig_on_scratch[0]
-    merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
-    cp_from_scratch(output, scratch)
+if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == 'y':
+  rule subsampleGenomeSize_withBulk:
+    input: 
+      "Combined_Analysis/super_contigs.{id}.fasta",
+      expand("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt", subsample=subsampleIDs),
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
+    output: 
+      "Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt"
+    params:
+      name="subsampleGenomeSize_withBulk",
+      qos="normal",
+      time="2:00:00",
+      partition="normal",
+      mem="4000", # don't change
+      contig_thresh=parameters.ix['biosample_contig_thresh','entry']
+    threads: 1
+    version: "2.0"
+    run: 
+      # Managing files and obtain scratch location
+      scratch = os.environ["LOCAL_SCRATCH"]
+      input_on_scratch = names_on_scratch(input, scratch)
+      output_on_scratch = names_on_scratch(output, scratch)
+      contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
+      cp_to_scratch(input, scratch)
+      # Perform organization of contigs    
+      shell("""
+        source activate {python2_env}
+        python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
+        """)
+      input_on_scratch[0] = contig_on_scratch[0]
+      # What the next line does is to compute the NUMBER OF BPs COVERED (not coverage depth)
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      cp_from_scratch(output, scratch)
+else:
+  rule subsampleGenomeSize_miniMetaOnly:
+    input: 
+      "Combined_Analysis/super_contigs.{id}.fasta",
+      expand("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt", subsample=subsampleIDs)
+    output: 
+      "Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt"
+    params:
+      name="subsampleGenomeSize_miniMetaOnly",
+      qos="normal",
+      time="2:00:00",
+      partition="normal",
+      mem="4000", # don't change
+      contig_thresh=parameters.ix['biosample_contig_thresh','entry']
+    threads: 1
+    version: "2.0"
+    run: 
+      # Managing files and obtain scratch location
+      scratch = os.environ["LOCAL_SCRATCH"]
+      input_on_scratch = names_on_scratch(input, scratch)
+      output_on_scratch = names_on_scratch(output, scratch)
+      contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
+      cp_to_scratch(input, scratch)
+      # Perform organization of contigs    
+      shell("""
+        source activate {python2_env}
+        python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
+        """)
+      input_on_scratch[0] = contig_on_scratch[0]
+      # What the next line does is to compute the NUMBER OF BPs COVERED (not coverage depth)
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      cp_from_scratch(output, scratch)
 

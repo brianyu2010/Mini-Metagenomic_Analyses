@@ -98,8 +98,8 @@ rule all:
   # input:  expand("{subsample}/BlastResults.{subsample}.txt", subsample=subsampleIDs)
   input: 
     # These are possible outputs to request
-    expand("{subsample}/megahit_quast_report.{subsample}.txt", subsample=subsampleIDs),
-    expand("{subsample}/metaSPAdes_quast_report.{subsample}.txt", subsample=subsampleIDs),
+    expand("{subsample}/metaquast_report_metaSPAdesBulk.{subsample}.txt", subsample=subsampleIDs),
+    expand("{subsample}/metaquast_report_megahitBulk.{subsample}.txt", subsample=subsampleIDs),
     # fastqc of fastq reads in subsamples
     expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
     expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs)

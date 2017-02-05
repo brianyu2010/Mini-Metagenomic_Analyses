@@ -14,8 +14,6 @@
 #            adapted for sherlock
 #################################################
 
-
-
 # use an input file to specify and cat the fastq files into local10G
 rule concatenate:
   # for each subsample, find fastq files from all sequencing runs and combine them.
@@ -37,7 +35,14 @@ rule concatenate:
     scratch = os.environ["LOCAL_SCRATCH"]
     output_on_scratch = names_on_scratch(output, scratch)
     print(scratch)
-    s = sample_table.ix[wildcards.subsample,:] 
+    # 2017.02.02 Added to solve the ambiguity of subsample and bulksample
+    if bulk_flag:
+      if wildcards.subsample in sample_table.index.tolist():
+        s = sample_table.ix[wildcards.subsample,:]
+      else:
+        s = bulk_table.ix[wildcards.subsample,:]
+    else:
+      s = sample_table.ix[wildcards.subsample,:] 
     # if only one row, automatically become a column so need to handle that
     if len(s.shape) == 1:
       print('Sample '+wildcards.subsample+' exists in only one sequencing run.')
@@ -107,7 +112,9 @@ rule quality_trim:
     qos="normal",
     time="12:00:00",
     partition=parameters.ix['subsample_trim_partition','entry'], 
-    mem=parameters.ix['subsample_trim_memory','entry']
+    mem=parameters.ix['subsample_trim_memory','entry'],
+    trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),
+    downsample_read_number=str(4*int(parameters.ix['Down_Sample_Read_Number','entry']))
   threads: int(parameters.ix['subsample_trim_thread','entry'])
   version: "2.0"
   run:
@@ -115,7 +122,34 @@ rule quality_trim:
     scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
-    cp_to_scratch(input, scratch)
+    # cp_to_scratch(input, scratch) # No need
+    # trim fastq to desired read length (ie. 75 bp) if required
+    if int(params.trim_to_read_length) <= 0:
+      print('Do no trim reads')
+      shell("""cp {input[0]} {scratch}/trimmed1.fastq; cp {input[1]} {scratch}/trimmed2.fastq""")
+    else:
+      shell("""
+        source activate {python3_env}
+        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[0]} -o {scratch}/trimmed1.fastq}
+        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[1]} -o {scratch}/trimmed2.fastq}
+        """)
+    # randomize fastq using a python script
+    if int(params.downsample_read_number) <= 0:
+      print('Do not downsample reads')
+      shell("""mv {scratch}/trimmed1.fastq {input_on_scratch[0]}
+        mv {scratch}/trimmed2.fastq {input_on_scratch[1]}""")
+    else:
+      # take the frist set number of lines
+      print('Down Sample Read Number of Lines is: '+params.downsample_read_number)
+      shell("""
+        source activate {python2_env}
+        python --version
+        python {code_dir}/randomizeFastq.py {scratch}/trimmed1.fastq {scratch}/trimmed2.fastq {scratch}/temp
+        head -n {params.downsample_read_number} {scratch}/temp1.fastq > {input_on_scratch[0]}
+        head -n {params.downsample_read_number} {scratch}/temp2.fastq > {input_on_scratch[1]}
+        wc -l {input_on_scratch[0]}
+        wc -l {input_on_scratch[1]}
+        """)
     # Performing trimmomatic trimming; note there are 4 outputs
     # Trimmomatic can be multi-threaded
     shell("""
@@ -169,6 +203,8 @@ rule overrep_seq:
       """)
     cp_from_scratch(output, scratch)
 
+    
+"""
 # could combined this rule into the trimming rule
 rule preprocess:
   input: 
@@ -191,20 +227,24 @@ rule preprocess:
     # organize input
     scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
-    # trim fastq to desired read length (ie. 75 bp)
-    shell("""
-      source activate {python3_env}
-      fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[0]} -o {input_on_scratch[0]}
-      fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[1]} -o {input_on_scratch[1]}
-      """)
+    # trim fastq to desired read length (ie. 75 bp) if required
+    if int(params.trim_to_read_length) <= 0:
+        print('Do no trim reads')
+        shell("cp {input[0]} {input_on_scratch[0]}; cp {input[1]} {input_on_scratch[1]}")
+    else:
+      shell(""
+        source activate {python3_env}
+        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[0]} -o {input_on_scratch[0]}
+        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[1]} -o {input_on_scratch[1]}
+        "")
     # randomize fastq using a python script
     if int(params.downsample_read_number) <= 0:
       print('Do not downsample reads')
-      shell("""mv {input[0]} {output[0]}; mv {input[1]} {output[1]}""")
+      shell("mv {input_on_scratch[0]} {output[0]}; mv {input_on_scratch[1]} {output[1]}")
     else:
       # take the frist set number of lines
       print('Down Sample Read Number of Lines is: '+params.downsample_read_number)
-      shell("""
+      shell(""
         source activate {python2_env}
         python --version
         python {code_dir}/randomizeFastq.py {input_on_scratch} {scratch}/temp
@@ -212,6 +252,6 @@ rule preprocess:
         head -n {params.downsample_read_number} {scratch}/temp2.fastq > {output[1]}
         wc -l {output[0]}
         wc -l {output[1]}
-        """)
-
+        "")
+"""
 
