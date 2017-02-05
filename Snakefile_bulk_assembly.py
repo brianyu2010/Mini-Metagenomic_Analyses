@@ -185,7 +185,7 @@ rule align_to_bulk_megahit_assembly:
   params: 
     name="bulkMegahitAbundance",
     qos="normal",
-    time="2-0",
+    time="1-0",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -232,7 +232,7 @@ rule align_to_bulk_metaSPAdes_assembly:
   params: 
     name="bulkMetaSPAdesAbundance",
     qos="normal",
-    time="2-0",
+    time="1-0",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']

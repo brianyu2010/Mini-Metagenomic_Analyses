@@ -97,13 +97,13 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
   rule all_withbulk:
     input:
       # MiniMetagenomic subsample outputs
-      expand("Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", id=biosample),
-      expand("Combined_Analysis/readsOnlyAssembly_contigs.{id}.fasta", id=biosample),
+      # expand("Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", id=biosample),
+      # expand("Combined_Analysis/readsOnlyAssembly_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/minimeta_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample),
-      expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
-      # expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
+      # expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
+      expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample),
@@ -129,12 +129,12 @@ else:
     # input:  expand("{subsample}/BlastResults.{subsample}.txt", subsample=subsampleIDs)
     input: 
       # These are possible outputs to request. Only Minimetagenomic Subsample outputs
-      expand("Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", id=biosample),
-      expand("Combined_Analysis/readsOnlyAssembly_contigs.{id}.fasta", id=biosample),
+      # expand("Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", id=biosample),
+      # expand("Combined_Analysis/readsOnlyAssembly_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/minimeta_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample),
-      expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
+      # expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
       # expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),

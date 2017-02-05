@@ -27,7 +27,7 @@ rule combine_threshold_subsample_contigs:
   params:
     name="combine_threshold_subsample_contigs",
     qos="normal",
-    time="1:00:00",
+    time="30:00",
     partition="normal",
     mem="4000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
@@ -56,7 +56,7 @@ rule create_subsampleContigIndex:
   params:
     name="create_subsampleContigIndex",
     qos="normal",
-    time="24:00:00",
+    time="12:00:00",
     partition="normal",
     mem="64000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']

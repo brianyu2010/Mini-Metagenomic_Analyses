@@ -241,7 +241,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="make_super_contigs_bulk",
       qos="normal",
-      time="1:00:00",
+      time="2:00:00",
       partition="normal",
       mem="16000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -270,6 +270,16 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         cat {input_on_scratch} > {output}
         echo 'SuperContig construction completed'
         """)
+      # Making metaquast and quast for combined supercontigs ONLY when bulk is included
+      shell("""
+        echo; date; pwd 
+        source activate {python2_env}
+        metaquast_output_dir={wildcards.folder}/metaquast_superContig
+        quast_output_dir={wildcards.folder}/quast_superContig
+        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
+        quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
+        date; echo; source deactivate
+        """)
       assert(file_empty(output)),"Supercontig file is empty."
 else:
   # rename each super contig with super contig code
@@ -282,7 +292,7 @@ else:
     params:
       name="make_super_contigs_miniMetaOnly",
       qos="normal",
-      time="1:00:00",
+      time="2:00:00",
       partition="normal",
       mem="16000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']

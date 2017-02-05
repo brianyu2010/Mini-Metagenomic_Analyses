@@ -120,7 +120,7 @@ rule subsample_remove_reads:
   params: 
     name="subsample_remove_reads",
     qos="normal",
-    time="12:00:00",
+    time="4:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
