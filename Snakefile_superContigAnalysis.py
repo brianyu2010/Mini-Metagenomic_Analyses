@@ -199,6 +199,7 @@ rule subsampleSuperContigPileup:
     name="subsampleSuperContigPileup",
     qos="normal",
     time="12:00:00",
+    mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -221,8 +222,9 @@ rule subsampleSuperContigPileup:
       source activate {python3_env}
       cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
       bowtie2 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
       samtools view -b -o alignResults.bam alignResults.sam
-      samtools sort -o alignResults_sorted.bam alignResults.bam
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
       cp alignResults_sorted.bam {output_on_scratch[1]}
       samtools index alignResults_sorted.bam
       samtools mpileup -f threshold_super_contigs.fasta -o alignResults.pile alignResults_sorted.bam 

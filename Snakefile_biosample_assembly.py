@@ -241,11 +241,11 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="make_super_contigs_bulk",
       qos="normal",
-      time="1-0",
+      time="24:00:00",
       partition="normal",
-      mem="16000",
+      mem="64000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-    threads: 4
+    threads: 16
     version: "2.0"
     run:
       # Manage files and obtain scratch location
@@ -276,7 +276,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         source activate {python2_env}
         metaquast_output_dir={wildcards.folder}/metaquast_superContig
         quast_output_dir={wildcards.folder}/quast_superContig
-        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
+        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
         quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
         date; echo; source deactivate
         """)

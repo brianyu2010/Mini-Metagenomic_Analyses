@@ -213,7 +213,7 @@ rule minimeta_spade_assembly:
       cp $spades_output_dir/contigs.fasta {output[1]}
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
-      # metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
+      # metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
       quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate

@@ -87,7 +87,7 @@ rule megahit_assembly:
         source activate {python2_env}
         metaquast_output_dir={wildcards.subsample}/metaquast_megahit
         quast_output_dir={scratch}/quast_output
-        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
+        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
         quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output[0]}
         cp $quast_output_dir/report.txt {output[1]}
         source deactivate
@@ -161,7 +161,7 @@ rule metaSPAdes_assembly:
         source activate {python2_env}
         metaquast_output_dir={wildcards.subsample}/metaquast_metaSPAdes
         quast_output_dir={scratch}/quast_output
-        metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
+        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
         quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output[0]}
         cp $quast_output_dir/report.txt {output[1]}
         source deactivate
@@ -186,6 +186,7 @@ rule align_to_bulk_megahit_assembly:
     name="bulkMegahitAbundance",
     qos="normal",
     time="1-0",
+    mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -209,8 +210,9 @@ rule align_to_bulk_megahit_assembly:
       cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
       echo 'Aligning both paired and single reads'
       bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x bulkContigBase -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
       samtools view -b -o alignResults.bam alignResults.sam
-      samtools sort -o alignResults_sorted.bam alignResults.bam
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
       samtools index alignResults_sorted.bam
       samtools mpileup -f temp.fasta -o {output_on_scratch[0]} alignResults_sorted.bam
       echo 'Currently this rule only returns the pileup file'
@@ -233,6 +235,7 @@ rule align_to_bulk_metaSPAdes_assembly:
     name="bulkMetaSPAdesAbundance",
     qos="normal",
     time="1-0",
+    mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -256,8 +259,9 @@ rule align_to_bulk_metaSPAdes_assembly:
       cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
       echo 'Aligning both paired and single reads'
       bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x bulkContigBase -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
       samtools view -b -o alignResults.bam alignResults.sam
-      samtools sort -o alignResults_sorted.bam alignResults.bam
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
       samtools index alignResults_sorted.bam
       samtools mpileup -f temp.fasta -o {output_on_scratch[0]} alignResults_sorted.bam
       echo 'Currently this rule only returns the pileup file'
