@@ -185,7 +185,7 @@ rule align_to_bulk_megahit_assembly:
   params: 
     name="bulkMegahitAbundance",
     qos="normal",
-    time="1-0",
+    time="23:00:00",
     mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
@@ -234,7 +234,7 @@ rule align_to_bulk_metaSPAdes_assembly:
   params: 
     name="bulkMetaSPAdesAbundance",
     qos="normal",
-    time="1-0",
+    time="23:00:00",
     mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
