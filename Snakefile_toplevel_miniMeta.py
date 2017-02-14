@@ -110,8 +110,8 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
       # Bulk outputs 
       expand("{bulksample}/quast_report_metaSPAdesBulk.{bulksample}.txt", bulksample=bulksampleIDs),
       expand("{bulksample}/quast_report_megahitBulk.{bulksample}.txt", bulksample=bulksampleIDs),
-      expand("{bulksample}/megahit_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
-      expand("{bulksample}/metaSPAdes_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs)
+      #expand("{bulksample}/megahit_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
+      #expand("{bulksample}/metaSPAdes_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs)
       # expand("{bulksample}/P1.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs),
       # expand("{bulksample}/P2.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs)          
     params:

@@ -50,28 +50,33 @@ rule megahit_assembly:
         file_size_check = 0
     # if file size check passes then proceed
     if file_size_check:
+      cp_to_scratch(input,scratch)
       # Assembly using megahit (for metagenomes). 
+      # 2015.12.01 Edited to use trimmed reads directly
+      # but first delete the output directory so that megahit doesn't complain
+      # shell("if [ -d {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample} ]; then rm -rf {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample}; fi") 
+      # now do assembly, megahit_output_folder is kept on scratch
+      # shell("bash {code_dir}/snakehelper_megahitAssembly.sh {scratch} {input_on_scratch} {resources_dir} {params.mem} {threads} {work_directory}/{wildcards.subsample}/megahit_output_{wildcards.subsample}")
       shell("""
-        # No longer cd to scratch
-        echo {scratch}; date; pwd; echo
+        echo {scratch}; cd {scratch}; date; pwd; echo
         source activate {python2_env}
         mem=$( echo {params.mem} )000000
         echo 'memory used in Bytes is '$mem 
-        megahit_output_dir={wildcards.subsample}/megahit_output_{wildcards.subsample}
+        megahit_output_dir=megahit_output_{wildcards.subsample}
         source activate {python3_env}
-        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input[0]} | wc -l ) / 4 ))
-        cat {input[2]} {input[3]} > {scratch}/single.fastq
-        echo -e 'Starting Assembly: Number of single end reads is: \t'$(( $( wc -l < {scratch}/single.fastq) / 4 ))
+        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input_on_scratch[0]} | wc -l ) / 4 ))
+        cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+        echo -e 'Starting Assembly: Number of single end reads is: \t'$(( $( wc -l < single.fastq) / 4 ))
         if [ -d $megahit_output_dir ]
         then
-        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 --continue -1 {input[0]} -2 {input[1]} -r {scratch}/single.fastq -o $megahit_output_dir --out-prefix megahit
+        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 --continue -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -r single.fastq -o $megahit_output_dir --out-prefix megahit
         else
-        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 -1 {input[0]} -2 {input[1]} -r {scratch}/single.fastq -o $megahit_output_dir --out-prefix megahit
+        time megahit --k-list {params.kmer} -t {threads} -m $mem --mem-flag 1 -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -r single.fastq -o $megahit_output_dir --out-prefix megahit
         fi
-        date; ls {scratch}; echo; ls $megahit_output_dir
+        date; ls; echo; ls $megahit_output_dir
         cp $megahit_output_dir/megahit.contigs.fa {output_on_scratch[0]}
         echo 'Assembly Completed'
-        source deactivate; pwd
+        source deactivate; ls
         """)
       addToContigName(output_on_scratch[0], 0, wildcards.subsample, output[0])
       # cp_from_scratch(output[0], scratch)
@@ -125,26 +130,27 @@ rule metaSPAdes_assembly:
         file_size_check = 0
     # if file size check passes then proceed
     if file_size_check:
+      cp_to_scratch(input,scratch)
       # Assembly using metaSPAdes (for shotgun metagenomes). 
       # now do assembly, keep output folder in scratch
       shell("""
-        echo {scratch}; date; pwd; echo
+        echo {scratch}; cd {scratch}; date; pwd; echo
         source activate {python2_env}
         mem=$( echo {params.mem} | rev | cut -c 4- | rev ) 
         echo 'memory used in Gb is '$mem 
-        spades_output_dir={wildcards.subsample}/metaSPAdes_output_{wildcards.subsample}
+        spades_output_dir=metaSPAdes_output_{wildcards.subsample}
         source activate {python3_env}
-        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input[0]} | wc -l ) / 4 ))
+        echo -e 'Starting Assembly: Number of paired end reads is: \t'$(( $( cat {input_on_scratch[0]} | wc -l ) / 4 ))
         if [ -d $spades_output_dir ]
         then
-        time metaspades.py -k {params.kmer} -t {threads} --continue -m $mem -1 {input[0]} -2 {input[1]} -o $spades_output_dir
+        time metaspades.py -k {params.kmer} -t {threads} --continue -m $mem -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -o $spades_output_dir
         else
-        time metaspades.py -k {params.kmer} -t {threads} -m $mem -1 {input[0]} -2 {input[1]} -o $spades_output_dir
+        time metaspades.py -k {params.kmer} -t {threads} -m $mem -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -o $spades_output_dir
         fi
-        date; ls {scratch}; echo; ls $spades_output_dir
+        date; ls; echo; ls $spades_output_dir
         cp $spades_output_dir/contigs.fasta {output_on_scratch[0]}
         echo 'Assembly Completed'
-        source deactivate; pwd
+        source deactivate; ls
         """)
       addToContigName(output_on_scratch[0], 0, wildcards.subsample, output[0])
       # cp_from_scratch(output[0], scratch)
@@ -189,27 +195,30 @@ rule align_to_bulk_megahit_assembly:
   run:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
+    input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
+    cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to bulk megahit contigs
     shell("""
-      echo {scratch}; date; echo
+      echo {scratch}; cd {scratch}; date; echo
       source activate {python2_env}
       echo 'Thresholding contigs'
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input[4]} {scratch}/temp.fasta
+      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[4]} temp.fasta
       source activate {python3_env};
       echo 'Creating bowtie2 indices'
-      bowtie2-build --quiet --threads {threads} -f {scratch}/temp.fasta {scratch}/bulkContigBase
-      cat {input[2]} {input[3]} > {scratch}/single.fastq
-      echo; ls {scratch}; echo; du -sh {scratch}; echo
+      bowtie2-build --quiet --threads {threads} -f temp.fasta bulkContigBase
+      cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+      echo; ls; echo; du -sh; echo
       echo 'Aligning both paired and single reads'
-      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x {scratch}/bulkContigBase -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
-      echo; ls {scratch}; echo; du -sh {scratch}; echo;
+      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x bulkContigBase -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      echo; ls; echo; du -sh; echo; rm {input_on_scratch}; du -sh # This is to free up hard drive space
       samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
-      samtools index {wildcards.subsample}/alignResults_sorted.bam
-      samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
-      rm {wildcards.subsample}/alignResults* # Remove intermediate files in  directory
-      echo 'Currently this rule only returns the pileup file'; date
+      samtools view -b -o alignResults.bam alignResults.sam
+      echo; ls; echo; du -sh; echo; rm alignResults.sam; du -sh # This is also used to free up disk space
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
+      samtools index alignResults_sorted.bam
+      samtools mpileup -f temp.fasta -o {output_on_scratch[0]} alignResults_sorted.bam
+      echo 'Currently this rule only returns the pileup file'
       """)
     cp_from_scratch(output, scratch)
 
@@ -238,26 +247,30 @@ rule align_to_bulk_metaSPAdes_assembly:
   run:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
+    input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
+    cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to bulk megahit contigs
     shell("""
-      echo {scratch}; date; echo
+      echo {scratch}; cd {scratch}; date; echo
       source activate {python2_env}
       echo 'Thresholding contigs'
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input[4]} {scratch}/temp.fasta
+      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[4]} temp.fasta
       source activate {python3_env}
       echo 'Creating bowtie2 indices'
-      bowtie2-build --quiet --threads {threads} -f {scratch}/temp.fasta {scratch}/bulkContigBase
-      cat {input[2]} {input[3]} > {scratch}/single.fastq
-      echo; ls {scratch}; echo; du -sh {scratch}; echo  
+      bowtie2-build --quiet --threads {threads} -f temp.fasta bulkContigBase
+      cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
+      echo; ls; echo; du -sh; echo  
       echo 'Aligning both paired and single reads'
-      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x {scratch}/bulkContigBase -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
-      echo; ls {scratch}; echo; du -sh {scratch}; echo;
+      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x bulkContigBase -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      echo; ls; echo; du -sh; echo; rm {input_on_scratch}; du -sh # This is to free up hard drive space 
       samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
-      samtools index {wildcards.subsample}/alignResults_sorted.bam
-      samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
-      echo 'Currently this rule only returns the pileup file'; date
+      samtools view -b -o alignResults.bam alignResults.sam
+      echo; ls; echo; du -sh; echo; rm alignResults.sam; du -sh # This is also used to free up disk space 
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
+      samtools index alignResults_sorted.bam
+      samtools mpileup -f temp.fasta -o {output_on_scratch[0]} alignResults_sorted.bam
+      echo 'Currently this rule only returns the pileup file'
       """)
     cp_from_scratch(output, scratch)
 

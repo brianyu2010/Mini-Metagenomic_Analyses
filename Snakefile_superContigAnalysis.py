@@ -66,8 +66,8 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
   rule merge_superContig_alignment_withBulk:
     input: 
       "Combined_Analysis/super_contigs.{id}.fasta",
-      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs),
-      expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs)
+      # expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
     output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
     params:
       name="merge_superContig_alignment_withBulk",
@@ -140,12 +140,12 @@ rule make_supercontig_indices:
   input:
     "Combined_Analysis/super_contigs.{id}.fasta"
   output:
-    "Combined_Analysis/superContigIndex_{id}.1.bt2l",
-    "Combined_Analysis/superContigIndex_{id}.2.bt2l",
-    "Combined_Analysis/superContigIndex_{id}.3.bt2l",
-    "Combined_Analysis/superContigIndex_{id}.4.bt2l",
-    "Combined_Analysis/superContigIndex_{id}.rev.1.bt2l",
-    "Combined_Analysis/superContigIndex_{id}.rev.2.bt2l"
+    temp("Combined_Analysis/superContigIndex_{id}.1.bt2l"),
+    temp("Combined_Analysis/superContigIndex_{id}.2.bt2l"),
+    temp("Combined_Analysis/superContigIndex_{id}.3.bt2l"),
+    temp("Combined_Analysis/superContigIndex_{id}.4.bt2l"),
+    temp("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l"),
+    temp("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l")
   params:
     name="make_supercontig_indices",
     qos="normal",
@@ -210,44 +210,48 @@ rule subsampleSuperContigPileup:
     scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
-    cp_to_scratch(input, scratch)
     # Bowtie2 Alignment of reads back to super_contigs (contigs with new names)
     # This is perhaps not the best way, use the line above instead
     # awk 'a1==$1 {a2+=$4; next} {print a1,"\t", a2; a1=$1; a2=$4} END {print a1,"\t",a2}' alignResults.pile > {output_on_scratch[2]}
     shell("""
-      basename=$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
-      echo {scratch}; cd {scratch}
+      # no longer cd to scratch
+      basename="Combined_Analysis"/$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
+      echo $basename; echo {scratch}; date; pwd; du -sh {scratch}
       source activate {python2_env}
-      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input_on_scratch[4]} threshold_super_contigs.fasta
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input[4]} {scratch}/threshold_super_contigs.fasta
       source activate {python3_env}
-      cat {input_on_scratch[2]} {input_on_scratch[3]} > single.fastq
-      bowtie2 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U single.fastq -S alignResults.sam
+      cat {input[2]} {input[3]} > {scratch}/single.fastq
+      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
+      echo; ls {scratch}; echo; du -sh {scratch}; echo
       samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o alignResults.bam alignResults.sam
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o alignResults_sorted.bam alignResults.bam
-      cp alignResults_sorted.bam {output_on_scratch[1]}
-      samtools index alignResults_sorted.bam
-      samtools mpileup -f threshold_super_contigs.fasta -o alignResults.pile alignResults_sorted.bam 
-      awk '$4>=5 {{print}}' alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output_on_scratch[0]}
+      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
+      echo; ls {scratch}; echo; du -sh {scratch}; echo
+      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
+      cp {wildcards.subsample}/alignResults_sorted.bam {output[1]}
+      echo; ls {wildcards.subsample}; echo; date
+      samtools index {wildcards.subsample}/alignResults_sorted.bam
+      echo; ls {wildcards.subsample}; echo; date
+      samtools mpileup -f {scratch}/threshold_super_contigs.fasta -o {wildcards.subsample}/alignResults.pile {wildcards.subsample}/alignResults_sorted.bam 
+      awk '$4>=5 {{print}}' {wildcards.subsample}/alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output[0]}
       # echo nextLineIsTheProblem
-      awk '$4>=1 {{print}}' alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output_on_scratch[2]}
+      awk '$4>=1 {{print}}' {wildcards.subsample}/alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output[2]}
+      rm {wildcards.subsample}/alignResults*
       echo Process_Completed
       """)
-    cp_from_scratch(output, scratch)
 
 
 
 rule VCFgenerate:
   input:
-    "Combined_Analysis/super_contigs.{id}.fasta",
+    "{folder}/super_contigs.{id}.fasta",
     expand("Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam", subsample=subsampleIDs)
   output:
-    "Combined_Analysis/subsample_variants.{id}.vcf",
-    "Combined_Analysis/subsample_supercontigCoverage.{id}.pile"
+    "{folder}/subsample_variants.{id}.vcf",
+    "{folder}/subsample_supercontigCoverage.{id}.pile"
   params:
     name="VCFgenerate",
-    qos="normal",
-    time="1-0",
+    qos="long",
+    time="5-0",
     partition="normal",
     mem="64000",
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -256,32 +260,27 @@ rule VCFgenerate:
   run: 
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
-    bamfiles_on_scratch = input_on_scratch[1:]
-    cp_to_scratch(input, scratch)
+    bamfiles = input[1:]
     # Perform organization of contigs    
     shell("""
-      echo {scratch}; cd {scratch} 
+      echo {scratch}; pwd; date
       source activate {python2_env}
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
+      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input[0]} {scratch}/temp_contigs.fasta
       source activate {python3_env}
-      samtools mpileup -g -t DP -f {contig_on_scratch[0]} -o subsample_alignment.bcf {bamfiles_on_scratch}
+      samtools mpileup -g -t DP -f {scratch}/temp_contigs.fasta -o {scratch}/subsample_alignment.bcf {bamfiles}
       echo BCF_file_generation_completed
-      samtools mpileup -f {contig_on_scratch[0]} -o {output_on_scratch[1]} {bamfiles_on_scratch}
-      bcftools call -c -v -o {output_on_scratch[0]} subsample_alignment.bcf 
-      echo VCF_file_generation_completed
+      samtools mpileup -f {scratch}/temp_contigs.fasta -o {output[1]} {bamfiles}
+      bcftools call -c -v -o {output[0]} {scratch}/subsample_alignment.bcf 
+      echo VCF_file_generation_completed; date
       """)
-    cp_from_scratch(output, scratch)
   
 
 if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == 'y':
   rule subsampleGenomeSize_withBulk:
     input: 
       "Combined_Analysis/super_contigs.{id}.fasta",
-      expand("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt", subsample=subsampleIDs),
-      expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
+      expand("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt", subsample=subsampleIDs)
+      # expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
     output: 
       "Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt"
     params:

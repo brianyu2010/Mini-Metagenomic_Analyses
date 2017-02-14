@@ -78,7 +78,7 @@ rule readsAndContigs_spades_assembly:
     expand("{subsample}/P2_corrected.{subsample}.fastq.gz", subsample=subsampleIDs),
     expand("{subsample}/S_corrected.{subsample}.fastq.gz", subsample=subsampleIDs),
     expand("{subsample}/contigs.{subsample}.fasta", subsample=subsampleIDs)
-  output: # for metaquast, no output is required
+  output: # for metaquast, no output is required; all output need the same wildcards
     "corrected_readsAndContigs.{id}.yaml",
     "Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", 
     "Combined_Analysis/readsAndContigsAssembly_scaffolds.{id}.fasta",
@@ -147,7 +147,7 @@ rule readsAndContigs_spades_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)
@@ -222,7 +222,7 @@ rule readsOnly_spades_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)
@@ -277,7 +277,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         metaquast_output_dir={wildcards.folder}/metaquast_superContig
         quast_output_dir={wildcards.folder}/quast_superContig
         metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
-        quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
+        quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
         date; echo; source deactivate
         """)
       assert(file_empty(output)),"Supercontig file is empty."

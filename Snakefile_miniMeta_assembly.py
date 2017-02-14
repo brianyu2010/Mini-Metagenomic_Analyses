@@ -23,7 +23,7 @@ rule combine_threshold_subsample_contigs:
   input:
     expand("{subsample}/contigs.{subsample}.fasta", subsample=subsampleIDs)
   output:
-    "Combined_Analysis/subsample_contigs.{id}.fasta"
+    "{folder}/subsample_contigs.{id}.fasta"
   params:
     name="combine_threshold_subsample_contigs",
     qos="normal",
@@ -45,14 +45,14 @@ rule combine_threshold_subsample_contigs:
 
 rule create_subsampleContigIndex:
   input:
-    "Combined_Analysis/subsample_contigs.{id}.fasta"
+    "{folder}/subsample_contigs.{id}.fasta"
   output:
-    "Combined_Analysis/subsample_bowtie_{id}.1.bt2l",
-    "Combined_Analysis/subsample_bowtie_{id}.2.bt2l",
-    "Combined_Analysis/subsample_bowtie_{id}.3.bt2l",
-    "Combined_Analysis/subsample_bowtie_{id}.4.bt2l",
-    "Combined_Analysis/subsample_bowtie_{id}.rev.1.bt2l",
-    "Combined_Analysis/subsample_bowtie_{id}.rev.2.bt2l"
+    temp("{folder}/subsample_bowtie_{id}.1.bt2l"),
+    temp("{folder}/subsample_bowtie_{id}.2.bt2l"),
+    temp("{folder}/subsample_bowtie_{id}.3.bt2l"),
+    temp("{folder}/subsample_bowtie_{id}.4.bt2l"),
+    temp("{folder}/subsample_bowtie_{id}.rev.1.bt2l"),
+    temp("{folder}/subsample_bowtie_{id}.rev.2.bt2l")
   params:
     name="create_subsampleContigIndex",
     qos="normal",
@@ -71,16 +71,16 @@ rule create_subsampleContigIndex:
     # Performing contig trimming and bowtie2-build
     # The variable work_directory is used in this part
     shell("""
-      basename=$(echo {output[0]} | cut -d/ -f2 | cut -d. -f1)
+      basename={wildcards.folder}/$(echo {output[0]} | cut -d/ -f2 | cut -d. -f1)
       echo $basename
-      date; source activate {python2_env}; cd {scratch}
-      python {code_dir}/process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {input_on_scratch} trimmed_subsample_contigs.fasta
+      date; source activate {python2_env}; pwd
+      python {code_dir}/process_scaffolds.py --trimHead 150 --trimTail 150 --lengthThresh {params.contig_thresh} {input} {scratch}/trimmed_subsample_contigs.fasta
       source activate {python3_env}
-      bowtie2-build --quiet --large-index --threads {threads} -f trimmed_subsample_contigs.fasta $basename
+      bowtie2-build --quiet --large-index --threads {threads} -f {scratch}/trimmed_subsample_contigs.fasta $basename
       source deactivate; date
       """)
     # Move the rest of the reads back
-    cp_from_scratch(output, scratch)
+    # cp_from_scratch(output, scratch)
 
 
 # This rule also needs pre-built bowtie index
@@ -96,9 +96,9 @@ rule remove_aligned_reads_from_subsampleContigs:
     expand("Combined_Analysis/subsample_bowtie_{id}.rev.1.bt2l", id=biosample),
     expand("Combined_Analysis/subsample_bowtie_{id}.rev.2.bt2l", id=biosample)
   output:
-    "{subsample}/leftover_total_reads_P1.{subsample}.fastq",
-    "{subsample}/leftover_total_reads_P2.{subsample}.fastq",
-    "{subsample}/leftover_total_reads_S.{subsample}.fastq"
+    temp("{subsample}/leftover_total_reads_P1.{subsample}.fastq"),
+    temp("{subsample}/leftover_total_reads_P2.{subsample}.fastq"),
+    temp("{subsample}/leftover_total_reads_S.{subsample}.fastq")
   params:
     name="remove_aligned_reads_from_subsampleContigs",
     qos="normal",
@@ -214,7 +214,7 @@ rule minimeta_spade_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)

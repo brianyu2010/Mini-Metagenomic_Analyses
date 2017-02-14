@@ -32,7 +32,7 @@ rule subsample_spade_assembly:
   params: 
     name="subsample_spade_assembly",
     qos="normal",
-    time="23:59:59",
+    time="4:00:00",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
     mem=parameters.ix['subsample_assembly_memory','entry'],
     kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
@@ -114,13 +114,13 @@ rule subsample_remove_reads:
     "{subsample}/S_corrected.{subsample}.fastq.gz",
     "{subsample}/contigs.{subsample}.fasta"
   output:
-    "{subsample}/leftover_reads_P1.{subsample}.fastq",
-    "{subsample}/leftover_reads_P2.{subsample}.fastq",
-    "{subsample}/leftover_reads_S.{subsample}.fastq"
+    temp("{subsample}/leftover_reads_P1.{subsample}.fastq"),
+    temp("{subsample}/leftover_reads_P2.{subsample}.fastq"),
+    temp("{subsample}/leftover_reads_S.{subsample}.fastq")
   params: 
     name="subsample_remove_reads",
     qos="normal",
-    time="4:00:00",
+    time="2:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
@@ -140,12 +140,12 @@ rule subsample_remove_reads:
       source activate {python3_env}
       echo 'Building bowtie2 indices'
       bowtie2-build --quiet --threads {threads} -f trimmed_subsample_contigs.fasta subsampleContigs
-      date; echo 'Aligning reads using bowtie2'
+      date; echo; du -sh; echo; echo 'Aligning reads using bowtie2'
       bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --un leftoverReadsSingle --un-conc leftoverReads -x subsampleContigs -1 {input_on_scratch[0]} -2 {input_on_scratch[1]} -U {input_on_scratch[2]} -S alignedResults.sam
       mv leftoverReads.1 {output_on_scratch[0]}
       mv leftoverReads.2 {output_on_scratch[1]}
       mv leftoverReadsSingle {output_on_scratch[2]}
-      source deactivate
+      echo; date; ls; echo; du -sh; echo; source deactivate
       """)
     cp_from_scratch(output, scratch)
 
