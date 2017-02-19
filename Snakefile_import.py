@@ -28,8 +28,8 @@ rule concatenate:
     qos="normal",
     time="4:00:00",
     partition="normal", 
-    mem="8000", # Don't change this
-  threads: 2
+    mem="64000", # Don't change this
+  threads: 16
   version: "2.0"
   run: 
     scratch = os.environ["LOCAL_SCRATCH"]
@@ -50,20 +50,26 @@ rule concatenate:
       shell("""
         cd {fastq_dir}; ls
         cp *.fastq.gz {scratch}
-        cd {scratch}
+        cd {scratch}; echo; du -sh; echo
         ls *.fastq.gz > zipped_file_names.txt
         while read line; do gzip -d $line; done < zipped_file_names.txt
+        echo; du -sh; echo
         ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
         ls *_R2_001.fastq | sort > read2files.txt; head read2files.txt
-        while read line; do cat $line >> {output_on_scratch[0]}
-        echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < $line ) / 4 ))
-        rm $line; done < read1files.txt
-        while read line; do cat $line >> {output_on_scratch[1]}
-        echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < $line ) / 4 ))
-        rm $line; done < read2files.txt
+        """)
+      # Putting in a separate shell script so that pwd is not on scratch
+      shell("""
+        echo; pwd; date; echo
+        while read line; do cat {scratch}/$line >> {output[0]}
+        echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
+        rm {scratch}/$line; done < {scratch}/read1files.txt
+        echo 'Finished read 1'
+        while read line; do cat {scratch}/$line >> {output[1]}
+        echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
+        rm {scratch}/$line; done < {scratch}/read2files.txt
         echo
-        echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output_on_scratch[0]}) / 4 ))
-        echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output_on_scratch[1]}) / 4 ))
+        echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output[0]}) / 4 ))
+        echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output[1]}) / 4 ))
         echo
         echo 'Combining fastq files completed'; date
         """)
@@ -75,27 +81,31 @@ rule concatenate:
         shell("""
           cd {fastq_dir}; ls
           cp *.fastq.gz {scratch}
-          cd {scratch}
+          cd {scratch}; echo; du -sh; echo
           ls *.fastq.gz > zipped_file_names.txt
           while read line; do gzip -d $line; done < zipped_file_names.txt
+          echo; du -sh; echo
           ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
           ls *_R2_001.fastq | sort > read2files.txt; head read2files.txt
-          while read line; do cat $line >> {output_on_scratch[0]}
-          echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < $line ) / 4 ))
-          rm $line; done < read1files.txt
-          while read line; do cat $line >> {output_on_scratch[1]}
-          echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < $line ) / 4 ))
-          rm $line; done < read2files.txt
+          """)
+        # Putting in a separate shell script so that pwd is not on scratch
+        shell("""
+          echo; pwd; date; echo
+          while read line; do cat {scratch}/$line >> {output[0]}
+          echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
+          rm {scratch}/$line; done < {scratch}/read1files.txt
+          while read line; do cat {scratch}/$line >> {output[1]}
+          echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
+          rm {scratch}/$line; done < {scratch}/read2files.txt
           echo
-          echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output_on_scratch[0]}) / 4 ))
-          echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output_on_scratch[1]}) / 4 ))
+          echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output[0]}) / 4 ))
+          echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output[1]}) / 4 ))
           echo
           echo 'Combining fastq files completed'; date
           """)
-    assert(file_empty(output_on_scratch)),"Output fastq files are empty."
-    assert(check_lines(output_on_scratch[0],output_on_scratch[1])),"Output fastq files have different number of lines."
-    assert(check_fastq_ids(output_on_scratch[0],output_on_scratch[1])),"Output fastq ids are not in the same order."
-    cp_from_scratch(output, scratch)
+    assert(file_empty(output)),"Output fastq files are empty."
+    assert(check_lines(output[0],output[1])),"Output fastq files have different number of lines."
+    assert(check_fastq_ids(output[0],output[1])),"Output fastq ids are not in the same order."
 
 
 rule quality_trim:
@@ -121,7 +131,7 @@ rule quality_trim:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
     input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
+    # output_on_scratch = names_on_scratch(output, scratch)
     # cp_to_scratch(input, scratch) # No need
     # trim fastq to desired read length (ie. 75 bp) if required
     if int(params.trim_to_read_length) <= 0:
@@ -149,11 +159,12 @@ rule quality_trim:
         head -n {params.downsample_read_number} {scratch}/temp2.fastq > {input_on_scratch[1]}
         wc -l {input_on_scratch[0]}
         wc -l {input_on_scratch[1]}
+        rm {scratch}/temp*.fastq
         """)
     # Performing trimmomatic trimming; note there are 4 outputs
     # Trimmomatic can be multi-threaded
     shell("""
-      echo {scratch}; cd {scratch}; date
+      echo {scratch}; date; echo; du -sh {scratch}; echo
       source activate {python3_env}
       cp {code_dir}/Combined_PE_V2.fa {scratch}/adapterSeqs.fa
       default_seedMismatch=3   # not sensitive
@@ -163,14 +174,14 @@ rule quality_trim:
       default_slidingQual=30   # I want this sliding window quality of 30
       default_maxInfoLen=120   # This is your target read length, possible choices are 120, 125, 140
       default_maxInfo_th=0.5   # Not very sensitive to this either. Probably because Q30 is dominant
-      default_option_string="ILLUMINACLIP:adapterSeqs.fa:$default_seedMismatch:$default_palen_th:10:$default_minAdapterLen:TRUE SLIDINGWINDOW:$default_slidingWindow:$default_slidingQual MAXINFO:$default_maxInfoLen:$default_maxInfo_th LEADING:30 TRAILING:30 MINLEN:30"
+      default_option_string="ILLUMINACLIP:{scratch}/adapterSeqs.fa:$default_seedMismatch:$default_palen_th:10:$default_minAdapterLen:TRUE SLIDINGWINDOW:$default_slidingWindow:$default_slidingQual MAXINFO:$default_maxInfoLen:$default_maxInfo_th LEADING:30 TRAILING:30 MINLEN:30"
       echo 'Start Trimming with Trimmomatic'
-      trimmomatic PE -phred33 -threads {threads} -trimlog pairtrim.log {input_on_scratch} {output_on_scratch} $default_option_string
+      trimmomatic PE -phred33 -threads {threads} -trimlog pairtrim.log {input_on_scratch} {output} $default_option_string
       echo 'Trimming Completed'; date; source deactivate
       """)
-    assert(check_lines(output_on_scratch[0],output_on_scratch[2])),"Paired output files have different number of lines."
-    assert(check_fastq_ids(output_on_scratch[0],output_on_scratch[2])),"Paired output files have different read id numbers/orders."
-    cp_from_scratch(output, scratch)
+    assert(check_lines(output[0],output[2])),"Paired output files have different number of lines."
+    assert(check_fastq_ids(output[0],output[2])),"Paired output files have different read id numbers/orders."
+    # cp_from_scratch(output, scratch)
 
 
 rule overrep_seq:

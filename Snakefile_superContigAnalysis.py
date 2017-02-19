@@ -149,7 +149,7 @@ rule make_supercontig_indices:
   params:
     name="make_supercontig_indices",
     qos="normal",
-    time="12:00:00",
+    time="6:00:00",
     partition="normal",
     mem="64000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
@@ -198,7 +198,7 @@ rule subsampleSuperContigPileup:
   params:
     name="subsampleSuperContigPileup",
     qos="normal",
-    time="12:00:00",
+    time="4:00:00",
     mem_per_core="4G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],

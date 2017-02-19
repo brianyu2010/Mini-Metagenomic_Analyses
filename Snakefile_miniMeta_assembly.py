@@ -56,7 +56,7 @@ rule create_subsampleContigIndex:
   params:
     name="create_subsampleContigIndex",
     qos="normal",
-    time="12:00:00",
+    time="5:00:00",
     partition="normal",
     mem="64000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
@@ -102,7 +102,7 @@ rule remove_aligned_reads_from_subsampleContigs:
   params:
     name="remove_aligned_reads_from_subsampleContigs",
     qos="normal",
-    time="12:00:00",
+    time="6:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']

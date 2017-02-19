@@ -32,7 +32,7 @@ rule subsample_spade_assembly:
   params: 
     name="subsample_spade_assembly",
     qos="normal",
-    time="4:00:00",
+    time="1:00:00",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
     mem=parameters.ix['subsample_assembly_memory','entry'],
     kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
@@ -120,7 +120,7 @@ rule subsample_remove_reads:
   params: 
     name="subsample_remove_reads",
     qos="normal",
-    time="2:00:00",
+    time="1:00:00",
     partition=parameters.ix['subsample_bowtie2_partition','entry'], 
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
