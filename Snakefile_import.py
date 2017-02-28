@@ -26,23 +26,26 @@ rule concatenate:
   params: 
     name="combine_fastq",
     qos="normal",
-    time="4:00:00",
+    time="2:00:00",
     partition="normal", 
-    mem="64000", # Don't change this
-  threads: 16
+    mem="16000", # Don't change this
+  threads: 4
   version: "2.0"
   run: 
     scratch = os.environ["LOCAL_SCRATCH"]
     output_on_scratch = names_on_scratch(output, scratch)
     print(scratch)
     # 2017.02.02 Added to solve the ambiguity of subsample and bulksample
+    # 2017.02.24 Edited to only handle the mini-metagenomic samples
+    """
     if bulk_flag:
       if wildcards.subsample in sample_table.index.tolist():
         s = sample_table.ix[wildcards.subsample,:]
       else:
         s = bulk_table.ix[wildcards.subsample,:]
     else:
-      s = sample_table.ix[wildcards.subsample,:] 
+    """
+    s = sample_table.ix[wildcards.subsample,:] 
     # if only one row, automatically become a column so need to handle that
     if len(s.shape) == 1:
       print('Sample '+wildcards.subsample+' exists in only one sequencing run.')
@@ -120,7 +123,7 @@ rule quality_trim:
   params: 
     name="quality_trim", 
     qos="normal",
-    time="6:00:00",
+    time="4:00:00",
     partition=parameters.ix['subsample_trim_partition','entry'], 
     mem=parameters.ix['subsample_trim_memory','entry'],
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),

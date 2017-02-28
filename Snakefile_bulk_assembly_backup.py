@@ -7,178 +7,9 @@
 # 2017.01.13 Added metaspade assembly in addition
 #            megahit assembly
 # 2017.02.01 Edited to work with Sherlock
-# 2017.02.24 Added bulk concatenate and quality trim rules
 ###############################################
 
 # rules
-
-# use an input file to specify and cat the fastq files into local10G
-rule BulkConcatenate:
-  # for each subsample, find fastq files from all sequencing runs and combine them.
-  # need to be able to handle certain subsamples appearing on in some sequencing runs but not others
-  # input: No Input
-  # temp removes the files once it has been used
-  output:
-    temp("{subsample}/read1_bulk.{subsample}.fastq"),
-    temp("{subsample}/read2_bulk.{subsample}.fastq")
-  params: 
-    name="bulk_combine_fastq",
-    qos="normal",
-    time="6:00:00",
-    partition="normal", 
-    mem="64000" # Don't change this
-  threads: 16
-  version: "2.0"
-  run: 
-    scratch = os.environ["LOCAL_SCRATCH"]
-    output_on_scratch = names_on_scratch(output, scratch)
-    print(scratch)
-    # 2017.02.02 Added to solve the ambiguity of subsample and bulksample
-    # 2017.02.24 Changed to look at only bulk subsamples
-    if bulk_flag:
-      s = bulk_table.ix[wildcards.subsample,:]
-      # if only one row, automatically become a column so need to handle that
-      if len(s.shape) == 1:
-        print('Sample '+wildcards.subsample+' exists in only one sequencing run.')
-        fastq_dir = s.ix["biosample"] + "/" + s.ix["sequencingrun"] + "/" + s.ix["subsamplename"]
-        shell("""
-          cd {fastq_dir}; ls
-          cp *.fastq.gz {scratch}
-          cd {scratch}; echo; du -sh; echo
-            ls *.fastq.gz > zipped_file_names.txt
-          while read line; do gzip -d $line; done < zipped_file_names.txt
-          echo; du -sh; echo
-          ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
-          ls *_R2_001.fastq | sort > read2files.txt; head read2files.txt
-          """)
-        # Putting in a separate shell script so that pwd is not on scratch
-        shell("""
-          echo; pwd; date; echo
-          while read line; do cat {scratch}/$line >> {output[0]}
-          echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
-          rm {scratch}/$line; done < {scratch}/read1files.txt
-          echo 'Finished read 1'
-          while read line; do cat {scratch}/$line >> {output[1]}
-          echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
-          rm {scratch}/$line; done < {scratch}/read2files.txt
-          echo
-          echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output[0]}) / 4 ))
-          echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output[1]}) / 4 ))
-          echo
-          echo 'Combining fastq files completed'; date
-          """)
-      else:
-        numseqruns = len(s.index)
-        print('Sample '+wildcards.subsample+' exists in '+str(numseqruns)+' sequencing runs.')
-        for i in range(numseqruns):
-          fastq_dir = s.ix[i,"biosample"] + "/" + s.ix[i,"sequencingrun"] + "/" + s.ix[i,"subsamplename"]
-          shell("""
-            cd {fastq_dir}; ls
-            cp *.fastq.gz {scratch}
-            cd {scratch}; echo; du -sh; echo
-            ls *.fastq.gz > zipped_file_names.txt
-            while read line; do gzip -d $line; done < zipped_file_names.txt
-            echo; du -sh; echo
-              ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
-            ls *_R2_001.fastq | sort > read2files.txt; head read2files.txt
-            """)
-          # Putting in a separate shell script so that pwd is not on scratch
-          shell("""
-            echo; pwd; date; echo
-            while read line; do cat {scratch}/$line >> {output[0]}
-            echo -e 'Number of reads in read1.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
-            rm {scratch}/$line; done < {scratch}/read1files.txt
-            while read line; do cat {scratch}/$line >> {output[1]}
-            echo -e 'Number of reads in read2.fastq is: '$(( $( wc -l < {scratch}/$line ) / 4 ))
-            rm {scratch}/$line; done < {scratch}/read2files.txt
-            echo
-            echo -e 'Number of reads in Read1.output is: '$(( $( wc -l < {output[0]}) / 4 ))
-            echo -e 'Number of reads in Read2.output is: '$(( $( wc -l < {output[1]}) / 4 ))
-            echo
-            echo 'Combining fastq files completed'; date
-            """)
-      assert(file_empty(output)),"Output fastq files are empty."
-      assert(check_lines(output[0],output[1])),"Output fastq files have different number of lines."
-      assert(check_fastq_ids(output[0],output[1])),"Output fastq ids are not in the same order."
-    else:
-      print('Error: bulk sample flag is not asserted')
-
-    
-
-rule bulk_quality_trim:
-  input: 
-    "{subsample}/read1_bulk.{subsample}.fastq", 
-    "{subsample}/read2_bulk.{subsample}.fastq"
-  output: 
-    "{subsample}/P1_bulk.{subsample}.fastq", 
-    "{subsample}/S1_bulk.{subsample}.fastq", 
-    "{subsample}/P2_bulk.{subsample}.fastq", 
-    "{subsample}/S2_bulk.{subsample}.fastq"
-  params: 
-    name="bulk_quality_trim", 
-    qos="normal",
-    time="12:00:00",
-    partition="normal", 
-    mem="64000",
-    trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),
-    downsample_read_number=str(4*int(parameters.ix['Down_Sample_Read_Number','entry']))
-  threads: 16
-  version: "2.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    # output_on_scratch = names_on_scratch(output, scratch)
-    # cp_to_scratch(input, scratch) # No need
-    # trim fastq to desired read length (ie. 75 bp) if required
-    if int(params.trim_to_read_length) <= 0:
-      print('Do no trim reads')
-      shell("""cp {input[0]} {scratch}/trimmed1.fastq; cp {input[1]} {scratch}/trimmed2.fastq""")
-    else:
-      shell("""
-        source activate {python3_env}
-        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[0]} -o {scratch}/trimmed1.fastq}
-        fastx_trimmer -Q33 -l {params.trim_to_read_length} -i {input[1]} -o {scratch}/trimmed2.fastq}
-        """)
-    # randomize fastq using a python script
-    if int(params.downsample_read_number) <= 0:
-      print('Do not downsample reads')
-      shell("""mv {scratch}/trimmed1.fastq {input_on_scratch[0]}
-        mv {scratch}/trimmed2.fastq {input_on_scratch[1]}""")
-    else:
-      # take the frist set number of lines
-      print('Down Sample Read Number of Lines is: '+params.downsample_read_number)
-      shell("""
-        source activate {python2_env}
-        python --version
-        python {code_dir}/randomizeFastq.py {scratch}/trimmed1.fastq {scratch}/trimmed2.fastq {scratch}/temp
-        head -n {params.downsample_read_number} {scratch}/temp1.fastq > {input_on_scratch[0]}
-        head -n {params.downsample_read_number} {scratch}/temp2.fastq > {input_on_scratch[1]}
-        wc -l {input_on_scratch[0]}
-        wc -l {input_on_scratch[1]}
-        rm {scratch}/temp*.fastq
-        """)
-    # Performing trimmomatic trimming; note there are 4 outputs
-    # Trimmomatic can be multi-threaded
-    shell("""
-      echo {scratch}; date; echo; du -sh {scratch}; echo
-      source activate {python3_env}
-      cp {code_dir}/Combined_PE_V2.fa {scratch}/adapterSeqs.fa
-      default_seedMismatch=3   # not sensitive
-      default_palen_th=30      # not sensitive
-      default_minAdapterLen=3  # not sensitive
-      default_slidingWindow=10 # this is a sensitive parameter. change to 6 and you get 50% less reads
-      default_slidingQual=30   # I want this sliding window quality of 30
-      default_maxInfoLen=120   # This is your target read length, possible choices are 120, 125, 140
-      default_maxInfo_th=0.5   # Not very sensitive to this either. Probably because Q30 is dominant
-      default_option_string="ILLUMINACLIP:{scratch}/adapterSeqs.fa:$default_seedMismatch:$default_palen_th:10:$default_minAdapterLen:TRUE SLIDINGWINDOW:$default_slidingWindow:$default_slidingQual MAXINFO:$default_maxInfoLen:$default_maxInfo_th LEADING:30 TRAILING:30 MINLEN:30"
-      echo 'Start Trimming with Trimmomatic'
-      trimmomatic PE -phred33 -threads {threads} -trimlog pairtrim.log {input_on_scratch} {output} $default_option_string
-      echo 'Trimming Completed'; date; source deactivate
-      """)
-    assert(check_lines(output[0],output[2])),"Paired output files have different number of lines."
-    assert(check_fastq_ids(output[0],output[2])),"Paired output files have different read id numbers/orders."
-
 
 rule megahit_assembly:
   # order of the inputs are paired1 paired2 single1 single2
@@ -190,10 +21,10 @@ rule megahit_assembly:
   #            contig_1_name\tabundance
   #            contig_2_name\tabundance
   input: 
-    "{subsample}/P1_bulk.{subsample}.fastq",
-    "{subsample}/P2_bulk.{subsample}.fastq",
-    "{subsample}/S1_bulk.{subsample}.fastq", 
-    "{subsample}/S2_bulk.{subsample}.fastq"
+    "{subsample}/P1.{subsample}.fastq",
+    "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/S1.{subsample}.fastq", 
+    "{subsample}/S2.{subsample}.fastq"
   output: 
     "{subsample}/megahit_contigs.{subsample}.fasta",
     "{subsample}/quast_report_megahitBulk.{subsample}.txt"
@@ -265,10 +96,10 @@ rule metaSPAdes_assembly:
   # order of the inputs are paired1 paired2 single1 single2
   # 2017.01.13 Added this to compare with megahit assembly on bulk
   input: 
-    "{subsample}/P1_bulk.{subsample}.fastq",
-    "{subsample}/P2_bulk.{subsample}.fastq"
-    # "{subsample}/S1_bulk.{subsample}.fastq", 
-    # "{subsample}/S2_bulk.{subsample}.fastq"
+    "{subsample}/P1.{subsample}.fastq",
+    "{subsample}/P2.{subsample}.fastq"
+    # "{subsample}/S1.{subsample}.fastq", 
+    # "{subsample}/S2.{subsample}.fastq"
   output: 
     "{subsample}/metaSPAdes_contigs.{subsample}.fasta",
     "{subsample}/quast_report_metaSPAdesBulk.{subsample}.txt"
@@ -337,10 +168,10 @@ rule metaSPAdes_assembly:
 rule align_to_bulk_megahit_assembly:
   # The output of this rule can be made more informative by including coverage of each contigs.
   input: 
-    "{subsample}/P1_bulk.{subsample}.fastq", 
-    "{subsample}/P2_bulk.{subsample}.fastq",
-    "{subsample}/S1_bulk.{subsample}.fastq",
-    "{subsample}/S2_bulk.{subsample}.fastq",
+    "{subsample}/P1.{subsample}.fastq", 
+    "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/S1.{subsample}.fastq",
+    "{subsample}/S2.{subsample}.fastq",
     "{subsample}/megahit_contigs.{subsample}.fasta"
   output:
     "{subsample}/megahit_contig_alignment.{subsample}.pile"
@@ -386,10 +217,10 @@ rule align_to_bulk_megahit_assembly:
 rule align_to_bulk_metaSPAdes_assembly:
   # The output of this rule can be made more informative by including coverage of each contigs.
   input: 
-    "{subsample}/P1_bulk.{subsample}.fastq", 
-    "{subsample}/P2_bulk.{subsample}.fastq",
-    "{subsample}/S1_bulk.{subsample}.fastq",
-    "{subsample}/S2_bulk.{subsample}.fastq",
+    "{subsample}/P1.{subsample}.fastq", 
+    "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/S1.{subsample}.fastq",
+    "{subsample}/S2.{subsample}.fastq",
     "{subsample}/metaSPAdes_contigs.{subsample}.fasta"
   output:
     "{subsample}/metaSPAdes_contig_alignment.{subsample}.pile"
