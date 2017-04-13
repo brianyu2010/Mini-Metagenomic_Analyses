@@ -24,8 +24,8 @@ rule BulkConcatenate:
   params: 
     name="bulk_combine_fastq",
     qos="normal",
-    time="6:00:00",
-    partition="normal", 
+    time="12:00:00",
+    partition="normal,hns", 
     mem="64000" # Don't change this
   threads: 16
   version: "2.0"
@@ -118,7 +118,7 @@ rule bulk_quality_trim:
     name="bulk_quality_trim", 
     qos="normal",
     time="12:00:00",
-    partition="normal", 
+    partition="normal,hns", 
     mem="64000",
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),
     downsample_read_number=str(4*int(parameters.ix['Down_Sample_Read_Number','entry']))
@@ -333,7 +333,8 @@ rule metaSPAdes_assembly:
     else:
       print('Input files have size 0')
 
-
+      
+"""
 rule align_to_bulk_megahit_assembly:
   # The output of this rule can be made more informative by including coverage of each contigs.
   input: 
@@ -359,7 +360,7 @@ rule align_to_bulk_megahit_assembly:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
     # Bowtie2 Alignment of reads back to bulk megahit contigs
-    shell("""
+    shell(""
       echo {scratch}; date; echo
       source activate {python2_env}
       echo 'Thresholding contigs'
@@ -379,7 +380,7 @@ rule align_to_bulk_megahit_assembly:
       samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
       rm {wildcards.subsample}/alignResults* # Remove intermediate files in  directory
       echo 'Currently this rule only returns the pileup file'; date
-      """)
+      "")
     cp_from_scratch(output, scratch)
 
 
@@ -408,7 +409,7 @@ rule align_to_bulk_metaSPAdes_assembly:
     # Managing files and obtain scratch location
     scratch = os.environ["LOCAL_SCRATCH"]
     # Bowtie2 Alignment of reads back to bulk megahit contigs
-    shell("""
+    shell(""
       echo {scratch}; date; echo
       source activate {python2_env}
       echo 'Thresholding contigs'
@@ -427,6 +428,6 @@ rule align_to_bulk_metaSPAdes_assembly:
       samtools index {wildcards.subsample}/alignResults_sorted.bam
       samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
       echo 'Currently this rule only returns the pileup file'; date
-      """)
+      "")
     cp_from_scratch(output, scratch)
-
+"""

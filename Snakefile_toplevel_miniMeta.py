@@ -106,7 +106,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
       expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
-      expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample),
+      # expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample),
       # Bulk outputs 
       expand("{bulksample}/quast_report_metaSPAdesBulk.{bulksample}.txt", bulksample=bulksampleIDs),
       expand("{bulksample}/quast_report_megahitBulk.{bulksample}.txt", bulksample=bulksampleIDs),

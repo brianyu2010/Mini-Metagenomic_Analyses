@@ -5,13 +5,15 @@
 # Snakemake file 
 #
 # 2017.02.01 Updated to work on the sherlock cluster
+# 2017.03.31 change how alignments and report combination works
 #######################################################
 
-def merge_superContig_alignment_results(input, output):
+def merge_superContig_alignment_results(input, output, normalize_flag):
   """
   input: a list of files in the form of subsample_superContig_alignmentReport.ILxxxxxx.txt
   output: table containing total coverage average coverage of each contig in each sample
           normalized by contig length
+  normalize_flag: flag to normalize coverage (length of contig covered) by contig length
   """
   num_input = len(input) - 1
   assert(num_input > 0),"Input has no valid files."
@@ -49,7 +51,10 @@ def merge_superContig_alignment_results(input, output):
         # this is a hack because all the subsample alignment reports have an empty line at the beginning.
         if l.split(): # if the line is not an empty line
           l = l.split()
-          superContig_coverage[l[0]][ind] = float(l[1])/float(superContig_length[l[0]])
+          if normalize_flag:
+            superContig_coverage[l[0]][ind] = float(l[1])/float(superContig_length[l[0]])
+          else:
+            superContig_coverage[l[0]][ind] = float(l[1]) # 2017.03.31 removed length normalization
   # Processing output file. output should be a list of only one string
   print(subsamples)
   with open(output[0],'w') as f:
@@ -66,14 +71,16 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
   rule merge_superContig_alignment_withBulk:
     input: 
       "Combined_Analysis/super_contigs.{id}.fasta",
-      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs)
-      # expand("Combined_Analysis/subsample_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
-    output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
+      expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs),
+      expand("Combined_Analysis/shotgun_superContig_alignmentReport.{bulksample}.txt", bulksample=bulksampleIDs)
+    output:
+      "Combined_Analysis/super_contigs.{id}.alignment_report.txt",
+      "Combined_Analysis/super_contigs.{id}.normalized_alignment_report.txt"
     params:
       name="merge_superContig_alignment_withBulk",
       qos="normal",
-      time="2:00:00",
-      partition="normal",
+      time="10:00",
+      partition="dev",
       mem="4000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 1
@@ -91,19 +98,22 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
         """)
       input_on_scratch[0] = contig_on_scratch[0]
-      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      merge_superContig_alignment_results(input_on_scratch, [output_on_scratch[0]], False)
+      merge_superContig_alignment_results(input_on_scratch, [output_on_scratch[1]], True)
       cp_from_scratch(output, scratch)
 else:
   rule merge_superContig_alignment_miniMetaOnly:
     input: 
       "Combined_Analysis/super_contigs.{id}.fasta",
       expand("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt", subsample=subsampleIDs)
-    output: "Combined_Analysis/super_contigs.{id}.alignment_report.txt"
+    output:
+      "Combined_Analysis/super_contigs.{id}.alignment_report.txt",
+      "Combined_Analysis/super_contigs.{id}.normalized_alignment_report.txt"
     params:
       name="merge_superContig_alignment_miniMetaOnly",
       qos="normal",
-      time="2:00:00",
-      partition="normal",
+      time="10:00",
+      partition="dev",
       mem="4000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 1
@@ -121,7 +131,8 @@ else:
         python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input_on_scratch[0]} {contig_on_scratch[0]}
         """)
       input_on_scratch[0] = contig_on_scratch[0]
-      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      merge_superContig_alignment_results(input_on_scratch, [output_on_scratch[0]], False)
+      merge_superContig_alignment_results(input_on_scratch, [output_on_scratch[1]], True)
       cp_from_scratch(output, scratch)
 
 
@@ -190,16 +201,15 @@ rule subsampleSuperContigPileup:
     expand("Combined_Analysis/superContigIndex_{id}.4.bt2l", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l", id=biosample)
-    # expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample)
   output:
     temp("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt"),
-    temp("Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam"),
-    temp("Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt")
+    "Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam",
+    "Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt"
   params:
     name="subsampleSuperContigPileup",
     qos="normal",
-    time="4:00:00",
-    mem_per_core="4G",
+    time="12:00:00", # 12 hrs
+    mem_per_core="3G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -215,31 +225,103 @@ rule subsampleSuperContigPileup:
     # awk 'a1==$1 {a2+=$4; next} {print a1,"\t", a2; a1=$1; a2=$4} END {print a1,"\t",a2}' alignResults.pile > {output_on_scratch[2]}
     shell("""
       # no longer cd to scratch
-      basename="Combined_Analysis"/$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
+      basename=Combined_Analysis/$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
       echo $basename; echo {scratch}; date; pwd; du -sh {scratch}
       source activate {python2_env}
       python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input[4]} {scratch}/threshold_super_contigs.fasta
       source activate {python3_env}
       cat {input[2]} {input[3]} > {scratch}/single.fastq
-      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
+      bowtie2 --phred33 --very-sensitive -k 100 -I 100 -X 2000 -p {threads} -t -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
       echo; ls {scratch}; echo; du -sh {scratch}; echo
       samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
-      echo; ls {scratch}; echo; du -sh {scratch}; echo
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
+      # Update flags for secondary alignment to make them primary alignment
+      samtools view -f 0x003 -h -o {wildcards.subsample}/alignResults_mapped.sam {wildcards.subsample}/alignResults.sam
+      source activate {python2_env}
+      python {code_dir}/change_sam_flags.py clear 8 {wildcards.subsample}/alignResults_mapped.sam {wildcards.subsample}/alignResults_adjusted.sam
+      source activate {python3_env}
+      samtools view -bh -@ {threads} -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults_adjusted.sam
+      samtools sort -m {params.mem_per_core} --threads {threads} -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
+      samtools index {wildcards.subsample}/alignResults_sorted.bam
+      echo; samtools flagstat {wildcards.subsample}/alignResults_sorted.bam
+      # keep bam file
       cp {wildcards.subsample}/alignResults_sorted.bam {output[1]}
       echo; ls {wildcards.subsample}; echo; date
-      samtools index {wildcards.subsample}/alignResults_sorted.bam
-      echo; ls {wildcards.subsample}; echo; date
-      samtools mpileup -f {scratch}/threshold_super_contigs.fasta -o {wildcards.subsample}/alignResults.pile {wildcards.subsample}/alignResults_sorted.bam 
-      awk '$4>=5 {{print}}' {wildcards.subsample}/alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output[0]}
-      # echo nextLineIsTheProblem
-      awk '$4>=1 {{print}}' {wildcards.subsample}/alignResults.pile | cut -f 1 | sort | uniq -c | awk '{{print $2,"\t",$1}}' > {output[2]}
+      # generate alignment report, first get all the contig names that had more than 1 read mapping to it
+      samtools idxstats {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 0) print $1}}' > {wildcards.subsample}/alignResults_contignames.txt
+      while read contig
+      do
+        coverage_length=$(samtools depth -r $contig {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 0) print $3}}' | wc -l)
+        genome_length=$(samtools depth -r $contig {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 5) print $3}}' | wc -l)
+        echo -e '$contig\t$coverage_length' >> {output[2]}
+        echo -e '$contig\t$genome_length' >> {output[0]}
+      done < {wildcards.subsample}/alignResults_contignames.txt
       rm {wildcards.subsample}/alignResults*
       echo Process_Completed
       """)
 
 
+rule shotgunSuperContigPileup:
+  input: 
+    "{subsample}/P1.{subsample}.fastq", 
+    "{subsample}/P2.{subsample}.fastq",
+    "{subsample}/S1.{subsample}.fastq",
+    "{subsample}/S2.{subsample}.fastq",
+    expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.1.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.2.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.3.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.4.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l", id=biosample),
+    expand("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l", id=biosample)
+  output:
+    temp("Combined_Analysis/shotgun_superContig_alignmentReport.{subsample}.txt"),
+    "Combined_Analysis/shotgunAlign2Supercontig.{subsample}.bam"
+  params:
+    name="shotgunSuperContigPileup",
+    qos="normal",
+    time="12:00:00", # 12 hrs
+    mem_per_core="3G",
+    partition="normal,hns",
+    mem="64000",
+    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
+  threads: 16
+  version: "2.0"
+  run:
+    # Managing files and obtain scratch location
+    scratch = os.environ["LOCAL_SCRATCH"]
+    input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
+    # Bowtie2 Alignment of reads back to super_contigs (contigs with new names)
+    shell("""
+      # no longer cd to scratch
+      basename=Combined_Analysis/$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
+      echo $basename; echo {scratch}; date; pwd; du -sh {scratch}
+      source activate {python2_env}
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input[4]} {scratch}/threshold_super_contigs.fasta
+      source activate {python3_env}
+      cat {input[2]} {input[3]} > {scratch}/single.fastq
+      bowtie2 --phred33 --very-sensitive -k 100 -I 100 -X 2000 -p {threads} -t -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
+      echo; ls {scratch}; echo; du -sh {scratch}; echo
+      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
+      # Update flags for secondary alignment to make them primary alignment
+      samtools view -f 0x003 -h -o {wildcards.subsample}/alignResults_mapped.sam {wildcards.subsample}/alignResults.sam
+      source activate {python2_env}
+      python {code_dir}/change_sam_flags.py clear 8 {wildcards.subsample}/alignResults_mapped.sam {wildcards.subsample}/alignResults_adjusted.sam
+      source activate {python3_env}
+      samtools view -bh -@ {threads} -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults_adjusted.sam
+      samtools sort -m {params.mem_per_core} --threads {threads} -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
+      samtools index {wildcards.subsample}/alignResults_sorted.bam
+      echo; samtools flagstat {wildcards.subsample}/alignResults_sorted.bam
+      # keep bam file
+      cp {wildcards.subsample}/alignResults_sorted.bam {output[1]}
+      echo; ls {wildcards.subsample}; echo; date
+      # only align reads and output number of reads mapped. CURRENTLY DOES NOT REMOVE DUPLICATES
+      samtools idxstats {wildcards.subsample}/alignResults_sorted.bam > {output[0]} # Only outputting number of reads that cover
+      rm {wildcards.subsample}/alignResults*
+      echo Process_Completed
+      """)
+
+    
 
 rule VCFgenerate:
   input:
@@ -306,7 +388,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         """)
       input_on_scratch[0] = contig_on_scratch[0]
       # What the next line does is to compute the NUMBER OF BPs COVERED (not coverage depth)
-      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch, False)
       cp_from_scratch(output, scratch)
 else:
   rule subsampleGenomeSize_miniMetaOnly:
@@ -338,6 +420,6 @@ else:
         """)
       input_on_scratch[0] = contig_on_scratch[0]
       # What the next line does is to compute the NUMBER OF BPs COVERED (not coverage depth)
-      merge_superContig_alignment_results(input_on_scratch, output_on_scratch)
+      merge_superContig_alignment_results(input_on_scratch, output_on_scratch, False)
       cp_from_scratch(output, scratch)
 
