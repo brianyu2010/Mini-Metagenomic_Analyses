@@ -110,15 +110,15 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
       # Bulk outputs 
       expand("{bulksample}/quast_report_metaSPAdesBulk.{bulksample}.txt", bulksample=bulksampleIDs),
       expand("{bulksample}/quast_report_megahitBulk.{bulksample}.txt", bulksample=bulksampleIDs),
-      #expand("{bulksample}/megahit_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
-      #expand("{bulksample}/metaSPAdes_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs)
-      # expand("{bulksample}/P1.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs),
-      # expand("{bulksample}/P2.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs)          
+      # expand("{bulksample}/megahit_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
+      # expand("{bulksample}/metaSPAdes_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
+      expand("{bulksample}/P1_bulk.{bulksample}.fastq", bulksample=bulksampleIDs),
+      # expand("{bulksample}/P2_bulk.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs)          
     params:
       name="top_level_withbulk",
       qos="normal",
-      time="30:00",
-      partition="normal",
+      time="10:00",
+      partition="dev",
       mem="4000"
     threads: 1
     version: "2.0"
@@ -142,8 +142,8 @@ else:
     params: 
       name="top_level_miniMetaOnly",
       qos="normal",
-      time="30:00",
-      partition="normal", 
+      time="10:00",
+      partition="dev", 
       mem="4000" 
     threads: 1
     version: "2.0"

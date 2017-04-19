@@ -79,11 +79,11 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="merge_superContig_alignment_withBulk",
       qos="normal",
-      time="10:00",
-      partition="dev",
-      mem="4000", # don't change
+      time="1:00:00",
+      partition="normal,hns",
+      mem="16000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-    threads: 1
+    threads: 4
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
@@ -112,11 +112,11 @@ else:
     params:
       name="merge_superContig_alignment_miniMetaOnly",
       qos="normal",
-      time="10:00",
-      partition="dev",
-      mem="4000", # don't change
+      time="1:00:00",
+      partition="normal,hns",
+      mem="16000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-    threads: 1
+    threads: 4
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
@@ -151,12 +151,12 @@ rule make_supercontig_indices:
   input:
     "Combined_Analysis/super_contigs.{id}.fasta"
   output:
-    temp("Combined_Analysis/superContigIndex_{id}.1.bt2l"),
-    temp("Combined_Analysis/superContigIndex_{id}.2.bt2l"),
-    temp("Combined_Analysis/superContigIndex_{id}.3.bt2l"),
-    temp("Combined_Analysis/superContigIndex_{id}.4.bt2l"),
-    temp("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l"),
-    temp("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l")
+    "Combined_Analysis/superContigIndex_{id}.1.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.2.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.3.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.4.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.rev.1.bt2l",
+    "Combined_Analysis/superContigIndex_{id}.rev.2.bt2l"
   params:
     name="make_supercontig_indices",
     qos="normal",
@@ -202,9 +202,9 @@ rule subsampleSuperContigPileup:
     expand("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l", id=biosample)
   output:
+    "Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt",
     temp("Combined_Analysis/subsample_superContig_mpileupReport.{subsample}.txt"),
-    "Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam",
-    "Combined_Analysis/subsample_superContig_alignmentReport.{subsample}.txt"
+    "Combined_Analysis/subsampleAlign2Supercontig.{subsample}.bam"
   params:
     name="subsampleSuperContigPileup",
     qos="normal",
@@ -225,6 +225,7 @@ rule subsampleSuperContigPileup:
     # awk 'a1==$1 {a2+=$4; next} {print a1,"\t", a2; a1=$1; a2=$4} END {print a1,"\t",a2}' alignResults.pile > {output_on_scratch[2]}
     shell("""
       # no longer cd to scratch
+      echo {input}
       basename=Combined_Analysis/$(echo {input[5]} | cut -d/ -f2 | cut -d. -f1)
       echo $basename; echo {scratch}; date; pwd; du -sh {scratch}
       source activate {python2_env}
@@ -244,7 +245,7 @@ rule subsampleSuperContigPileup:
       samtools index {wildcards.subsample}/alignResults_sorted.bam
       echo; samtools flagstat {wildcards.subsample}/alignResults_sorted.bam
       # keep bam file
-      cp {wildcards.subsample}/alignResults_sorted.bam {output[1]}
+      cp {wildcards.subsample}/alignResults_sorted.bam {output[2]}
       echo; ls {wildcards.subsample}; echo; date
       # generate alignment report, first get all the contig names that had more than 1 read mapping to it
       samtools idxstats {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 0) print $1}}' > {wildcards.subsample}/alignResults_contignames.txt
@@ -252,8 +253,8 @@ rule subsampleSuperContigPileup:
       do
         coverage_length=$(samtools depth -r $contig {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 0) print $3}}' | wc -l)
         genome_length=$(samtools depth -r $contig {wildcards.subsample}/alignResults_sorted.bam | awk '{{if ($3 > 5) print $3}}' | wc -l)
-        echo -e '$contig\t$coverage_length' >> {output[2]}
-        echo -e '$contig\t$genome_length' >> {output[0]}
+        echo -e "$contig\t$coverage_length" >> {output[0]}
+        echo -e "$contig\t$genome_length" >> {output[1]}
       done < {wildcards.subsample}/alignResults_contignames.txt
       rm {wildcards.subsample}/alignResults*
       echo Process_Completed
@@ -262,10 +263,10 @@ rule subsampleSuperContigPileup:
 
 rule shotgunSuperContigPileup:
   input: 
-    "{subsample}/P1.{subsample}.fastq", 
-    "{subsample}/P2.{subsample}.fastq",
-    "{subsample}/S1.{subsample}.fastq",
-    "{subsample}/S2.{subsample}.fastq",
+    "{subsample}/P1_bulk.{subsample}.fastq", 
+    "{subsample}/P2_bulk.{subsample}.fastq",
+    "{subsample}/S1_bulk.{subsample}.fastq",
+    "{subsample}/S2_bulk.{subsample}.fastq",
     expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.1.bt2l", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.2.bt2l", id=biosample),
@@ -315,8 +316,8 @@ rule shotgunSuperContigPileup:
       # keep bam file
       cp {wildcards.subsample}/alignResults_sorted.bam {output[1]}
       echo; ls {wildcards.subsample}; echo; date
-      # only align reads and output number of reads mapped. CURRENTLY DOES NOT REMOVE DUPLICATES
-      samtools idxstats {wildcards.subsample}/alignResults_sorted.bam > {output[0]} # Only outputting number of reads that cover
+      # only align reads and output number of reads mapped. CURRENTLY DOES NOT REMOVE DUPLICATES. remove last line because index is star
+      samtools idxstats {wildcards.subsample}/alignResults_sorted.bam | cut -f 1,3 | head -n -1 > {output[0]} # Only outputting number of reads that cover
       rm {wildcards.subsample}/alignResults*
       echo Process_Completed
       """)
