@@ -275,7 +275,7 @@ rule shotgunSuperContigPileup:
     expand("Combined_Analysis/superContigIndex_{id}.rev.1.bt2l", id=biosample),
     expand("Combined_Analysis/superContigIndex_{id}.rev.2.bt2l", id=biosample)
   output:
-    temp("Combined_Analysis/shotgun_superContig_alignmentReport.{subsample}.txt"),
+    "Combined_Analysis/shotgun_superContig_alignmentReport.{subsample}.txt",
     "Combined_Analysis/shotgunAlign2Supercontig.{subsample}.bam"
   params:
     name="shotgunSuperContigPileup",
