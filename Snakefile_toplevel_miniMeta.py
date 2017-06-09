@@ -135,7 +135,7 @@ else:
       expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample),
       # expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
-      # expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
+      expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample)

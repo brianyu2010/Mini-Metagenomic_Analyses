@@ -79,7 +79,7 @@ rule BulkConcatenate:
             ls *.fastq.gz > zipped_file_names.txt
             while read line; do gzip -d $line; done < zipped_file_names.txt
             echo; du -sh; echo
-              ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
+            ls *_R1_001.fastq | sort > read1files.txt; head read1files.txt
             ls *_R2_001.fastq | sort > read2files.txt; head read2files.txt
             """)
           # Putting in a separate shell script so that pwd is not on scratch
