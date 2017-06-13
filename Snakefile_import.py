@@ -27,9 +27,9 @@ rule concatenate:
     name="combine_fastq",
     qos="normal",
     time="2:00:00",
-    partition="normal", 
+    partition="normal,quake,owners", 
     mem="16000", # Don't change this
-  threads: 4
+  threads: 2
   version: "2.0"
   run: 
     scratch = os.environ["LOCAL_SCRATCH"]
@@ -179,7 +179,7 @@ rule quality_trim:
       default_maxInfo_th=0.5   # Not very sensitive to this either. Probably because Q30 is dominant
       default_option_string="ILLUMINACLIP:{scratch}/adapterSeqs.fa:$default_seedMismatch:$default_palen_th:10:$default_minAdapterLen:TRUE SLIDINGWINDOW:$default_slidingWindow:$default_slidingQual MAXINFO:$default_maxInfoLen:$default_maxInfo_th LEADING:30 TRAILING:30 MINLEN:30"
       echo 'Start Trimming with Trimmomatic'
-      trimmomatic PE -phred33 -threads {threads} -trimlog pairtrim.log {input_on_scratch} {output} $default_option_string
+      trimmomatic PE -phred33 -threads {threads} -trimlog {scratch}/pairtrim.log {input_on_scratch} {output} $default_option_string
       echo 'Trimming Completed'; date; source deactivate
       """)
     assert(check_lines(output[0],output[2])),"Paired output files have different number of lines."
@@ -195,7 +195,7 @@ rule overrep_seq:
     name="fastqc",
     qos="normal",
     time="30:00",
-    partition="normal", 
+    partition="normal,quake,owners", 
     mem="8000" # Don't change this
   threads: 2
   version: "2.0"

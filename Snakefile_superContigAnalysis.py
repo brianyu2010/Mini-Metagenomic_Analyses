@@ -80,7 +80,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
       name="merge_superContig_alignment_withBulk",
       qos="normal",
       time="1:00:00",
-      partition="normal,hns",
+      partition="normal,quake,owners",
       mem="16000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 4
@@ -113,7 +113,7 @@ else:
       name="merge_superContig_alignment_miniMetaOnly",
       qos="normal",
       time="1:00:00",
-      partition="normal,hns",
+      partition="normal,quake,owners",
       mem="16000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 4
@@ -161,10 +161,10 @@ rule make_supercontig_indices:
     name="make_supercontig_indices",
     qos="normal",
     time="6:00:00",
-    partition="normal",
-    mem="64000", # don't change this
+    partition="normal,quake",
+    mem="125000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: 16
+  threads: 10
   version: "2.0"
   run:
     # Manage files and obtain scratch location
@@ -209,7 +209,7 @@ rule subsampleSuperContigPileup:
     name="subsampleSuperContigPileup",
     qos="normal",
     time="12:00:00", # 12 hrs
-    mem_per_core="3G",
+    mem_per_core="6G",
     partition=parameters.ix['subsample_bowtie2_partition','entry'],
     mem=parameters.ix['subsample_bowtie2_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -281,11 +281,11 @@ rule shotgunSuperContigPileup:
     name="shotgunSuperContigPileup",
     qos="normal",
     time="12:00:00", # 12 hrs
-    mem_per_core="3G",
-    partition="normal,hns",
-    mem="64000",
+    mem_per_core="6G",
+    partition="normal,quake",
+    mem="125000",
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 16
+  threads: 10
   version: "2.0"
   run:
     # Managing files and obtain scratch location
@@ -334,11 +334,11 @@ rule VCFgenerate:
   params:
     name="VCFgenerate",
     qos="long",
-    time="5-0",
-    partition="normal",
-    mem="64000",
+    time="4-0",
+    partition="normal,quake",
+    mem="125000",
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 16
+  threads: 10
   version: "2.0"
   run: 
     # Managing files and obtain scratch location
@@ -369,9 +369,9 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="subsampleGenomeSize_withBulk",
       qos="normal",
-      time="2:00:00",
-      partition="normal",
-      mem="4000", # don't change
+      time="1:00:00",
+      partition="normal,quake,owners",
+      mem="8000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 1
     version: "2.0"
@@ -401,9 +401,9 @@ else:
     params:
       name="subsampleGenomeSize_miniMetaOnly",
       qos="normal",
-      time="2:00:00",
-      partition="normal",
-      mem="4000", # don't change
+      time="1:00:00",
+      partition="normal,quake,owners",
+      mem="8000", # don't change
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 1
     version: "2.0"

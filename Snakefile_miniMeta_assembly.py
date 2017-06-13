@@ -28,10 +28,10 @@ rule combine_threshold_subsample_contigs:
     name="combine_threshold_subsample_contigs",
     qos="normal",
     time="30:00",
-    partition="normal",
-    mem="4000", # don't change this
+    partition="normal,quake,owners",
+    mem="32000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: 1
+  threads: 3
   version: "2.0"
   run:
     # Manage files and obtain scratch location
@@ -57,10 +57,10 @@ rule create_subsampleContigIndex:
     name="create_subsampleContigIndex",
     qos="normal",
     time="5:00:00",
-    partition="normal",
-    mem="64000", # don't change this
+    partition="normal,quake",
+    mem="125000", # don't change this
     contig_thresh=parameters.ix['subsample_contig_thresh','entry']
-  threads: 16
+  threads: 10
   version: "2.0"
   run:
     # Manage files and obtain scratch location

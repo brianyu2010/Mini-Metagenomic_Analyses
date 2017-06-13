@@ -25,9 +25,9 @@ rule BulkConcatenate:
     name="bulk_combine_fastq",
     qos="normal",
     time="12:00:00",
-    partition="normal,hns", 
-    mem="64000" # Don't change this
-  threads: 16
+    partition="normal,quake", 
+    mem="125000" # Don't change this
+  threads: 10
   version: "2.0"
   run: 
     scratch = os.environ["LOCAL_SCRATCH"]
@@ -118,11 +118,11 @@ rule bulk_quality_trim:
     name="bulk_quality_trim", 
     qos="normal",
     time="12:00:00",
-    partition="normal,hns", 
-    mem="64000",
+    partition="normal,quake", 
+    mem="125000",
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),
     downsample_read_number=str(4*int(parameters.ix['Down_Sample_Read_Number','entry']))
-  threads: 16
+  threads: 10
   version: "2.0"
   run:
     # Managing files and obtain scratch location
@@ -173,7 +173,7 @@ rule bulk_quality_trim:
       default_maxInfo_th=0.5   # Not very sensitive to this either. Probably because Q30 is dominant
       default_option_string="ILLUMINACLIP:{scratch}/adapterSeqs.fa:$default_seedMismatch:$default_palen_th:10:$default_minAdapterLen:TRUE SLIDINGWINDOW:$default_slidingWindow:$default_slidingQual MAXINFO:$default_maxInfoLen:$default_maxInfo_th LEADING:30 TRAILING:30 MINLEN:30"
       echo 'Start Trimming with Trimmomatic'
-      trimmomatic PE -phred33 -threads {threads} -trimlog pairtrim.log {input_on_scratch} {output} $default_option_string
+      trimmomatic PE -phred33 -threads {threads} -trimlog {scratch}/pairtrim.log {input_on_scratch} {output} $default_option_string
       echo 'Trimming Completed'; date; source deactivate
       """)
     assert(check_lines(output[0],output[2])),"Paired output files have different number of lines."

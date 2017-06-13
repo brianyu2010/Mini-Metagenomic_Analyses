@@ -157,7 +157,7 @@ rule subsample_quast:
     name="subsample_quast",
     qos="normal",
     time="30:00",
-    partition="normal", 
+    partition="normal,quake,owners", 
     mem="8000",
     contig_thresh=int(parameters.ix['biosample_contig_thresh','entry'])
   threads: 2

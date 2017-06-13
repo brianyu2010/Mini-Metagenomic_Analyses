@@ -241,11 +241,11 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="make_super_contigs_bulk",
       qos="normal",
-      time="24:00:00",
-      partition="normal",
-      mem="64000",
+      time="16:00:00",
+      partition="normal,quake",
+      mem="126000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-    threads: 16
+    threads: 20
     version: "2.0"
     run:
       # Manage files and obtain scratch location
@@ -293,8 +293,8 @@ else:
       name="make_super_contigs_miniMetaOnly",
       qos="normal",
       time="2:00:00",
-      partition="normal",
-      mem="16000",
+      partition="normal,quake",
+      mem="50000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
     threads: 4
     version: "2.0"
