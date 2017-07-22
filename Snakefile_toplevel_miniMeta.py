@@ -68,11 +68,6 @@ python3_env = parameters.ix['python3_environment_name','entry']
 work_directory_base = parameters.ix['work_directory_base','entry']
 work_directory = work_directory_base+'/'+parameters.ix["biosample_name",'entry']
 
-# 2016.02.20 Added this line to avoid multi-line shell commands under
-# the new snakemake syntax. This removes errors in lines with &&\
-# -e handles nonzero exit status, -u handles unset variables --> -o fail
-# shell.prefix("set -euo pipefail;")
-
 # Add include files or other snakefile rule files
 # include: "Snakefile.utils_Mark"
 include: "Snakefile.utils_Felix"
@@ -103,7 +98,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
       expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
       expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample),
       # expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
-      expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
+      # expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample),
@@ -112,7 +107,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
       expand("{bulksample}/quast_report_megahitBulk.{bulksample}.txt", bulksample=bulksampleIDs),
       # expand("{bulksample}/megahit_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
       # expand("{bulksample}/metaSPAdes_contig_alignment.{bulksample}.pile", bulksample=bulksampleIDs),
-      expand("{bulksample}/P1_bulk.{bulksample}.fastq", bulksample=bulksampleIDs),
+      # expand("{bulksample}/P1_bulk.{bulksample}.fastq", bulksample=bulksampleIDs),
       # expand("{bulksample}/P2_bulk.{bulksample}.fastqc_results.txt", bulksample=bulksampleIDs)          
     params:
       name="top_level_withbulk",
@@ -131,14 +126,14 @@ else:
       # These are possible outputs to request. Only Minimetagenomic Subsample outputs
       # expand("Combined_Analysis/readsAndContigsAssembly_contigs.{id}.fasta", id=biosample),
       # expand("Combined_Analysis/readsOnlyAssembly_contigs.{id}.fasta", id=biosample),
-      expand("Combined_Analysis/minimeta_contigs.{id}.fasta", id=biosample),
-      expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
-      expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample),
+      # expand("Combined_Analysis/minimeta_contigs.{id}.fasta", id=biosample),
+      # expand("Combined_Analysis/super_contigs.{id}.fasta", id=biosample),
+      expand("Combined_Analysis/super_contigs.{id}.alignment_report.txt", id=biosample)
       # expand("Combined_Analysis/subsample_variants.{id}.vcf", id=biosample),
-      expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
+      # expand("{subsample}/quast_report.{subsample}.txt", subsample=subsampleIDs),
       # expand("{subsample}/P1.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
       # expand("{subsample}/P2.{subsample}.fastqc_results.txt", subsample=subsampleIDs),
-      expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample)
+      # expand("Combined_Analysis/super_contigs.{id}.subsampleGenomeSize.txt", id=biosample)
     params: 
       name="top_level_miniMetaOnly",
       qos="normal",

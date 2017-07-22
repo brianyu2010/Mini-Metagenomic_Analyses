@@ -280,12 +280,12 @@ rule shotgunSuperContigPileup:
   params:
     name="shotgunSuperContigPileup",
     qos="normal",
-    time="12:00:00", # 12 hrs
-    mem_per_core="6G",
-    partition="normal,quake",
-    mem="125000",
+    time="20:00:00", # 12 hrs
+    mem_per_core="10G", # changed for quake partition
+    partition="quake",
+    mem="130000",
     contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 10
+  threads: 9
   version: "2.0"
   run:
     # Managing files and obtain scratch location

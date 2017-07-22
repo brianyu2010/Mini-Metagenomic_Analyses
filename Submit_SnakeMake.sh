@@ -25,7 +25,7 @@ root_folder=/datastore/brianyu/2015.03.11_SygnisTruePrime/
 snakemake -j 30 -w 600 -k --config location=$root_folder --cluster "sbatch --job-name={params.name} --ntasks=1 --cpus-per-task={threads} --partition={params.partition} --mem={params.mem} -o {params.name}_%j.log" --rerun-incomplete -s Snakefile.toplevel 
 
 # Actually do this
-snakemake -j 20 -w 600 -k --config location=$root_folder --cluster "sbatch --job-name={params.name} --ntasks=1 --cpus-per-task={threads} --partition={params.partition} --qos={params.qos} --mem={params.mem} --time={params.time} -o {params.name}_%j.log" --rerun-incomplete -s Snakefile_toplevel_miniMeta.py --unlock -n
+snakemake -j 5 -w 300 -k --config location=$root_folder --cluster "sbatch --job-name={params.name} --ntasks=1 --cpus-per-task={threads} --partition={params.partition} --mem={params.mem} --time={params.time} -o {params.name}_%j.log" --rerun-incomplete -s Snakefile_toplevel_miniMeta.py --unlock -n
 
 
 echo "Process Completed"

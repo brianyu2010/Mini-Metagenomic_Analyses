@@ -24,10 +24,10 @@ rule BulkConcatenate:
   params: 
     name="bulk_combine_fastq",
     qos="normal",
-    time="12:00:00",
-    partition="normal,quake", 
-    mem="125000" # Don't change this
-  threads: 10
+    time="6:00:00",
+    partition="quake,owners", 
+    mem="255000" # Don't change this
+  threads: 20
   version: "2.0"
   run: 
     scratch = os.environ["LOCAL_SCRATCH"]
@@ -117,12 +117,12 @@ rule bulk_quality_trim:
   params: 
     name="bulk_quality_trim", 
     qos="normal",
-    time="12:00:00",
-    partition="normal,quake", 
-    mem="125000",
+    time="6:00:00",
+    partition="quake,owners", 
+    mem="255000",
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),
     downsample_read_number=str(4*int(parameters.ix['Down_Sample_Read_Number','entry']))
-  threads: 10
+  threads: 20
   version: "2.0"
   run:
     # Managing files and obtain scratch location

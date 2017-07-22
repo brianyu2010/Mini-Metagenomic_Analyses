@@ -152,7 +152,7 @@ rule minimeta_spade_assembly:
   params:    
     name="minimeta_spade_assembly",
     qos="normal",
-    time="7-0",  # means 7 days
+    time="6-0",  # means 7 days
     partition=parameters.ix['biosample_assembly_partition','entry'], 
     mem=parameters.ix['biosample_assembly_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry'],
@@ -214,7 +214,8 @@ rule minimeta_spade_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      # Edited 2017.07.20 --meta is now expired, do not do gene prediction
+      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)

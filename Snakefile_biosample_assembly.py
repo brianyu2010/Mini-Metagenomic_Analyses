@@ -147,7 +147,7 @@ rule readsAndContigs_spades_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)
@@ -222,7 +222,7 @@ rule readsOnly_spades_assembly:
       cp $spades_output_dir/scaffolds.fasta {output[2]}
       source activate {python2_env}
       # metaquast.py --plots-format svg --gene-finding -m {params.contig_thresh} -t {threads} -o $spades_output_dir/metaquast_output {output[1]}
-      quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
+      quast.py -m {params.contig_thresh} -t {threads} -o $spades_output_dir/quast_output {output[1]}
       cp $spades_output_dir/quast_output/report.txt {output[3]}
       date; source deactivate
       """)
@@ -276,8 +276,10 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
         source activate {python2_env}
         metaquast_output_dir={wildcards.folder}/metaquast_superContig
         quast_output_dir={wildcards.folder}/quast_superContig
-        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
-        quast.py --gene-finding --meta -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
+        # --gene-finding --meta has expired
+        metaquast.py --plots-format svg --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output}
+        # --gene-finding --meta has expired. No longer do gene finding
+        quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output}
         date; echo; source deactivate
         """)
       assert(file_empty(output)),"Supercontig file is empty."
@@ -322,37 +324,3 @@ else:
         """)
       assert(file_empty(output)),"Supercontig file is empty."
 
-
-
-# The blast database has not been setup yet so don't use this rule yet
-"""
-rule biosample_BLAST:
-  input: "Combined_Analysis/super_contigs.{id}.fasta"
-  output: "Combined_Analysis/BlastResults.{id}.txt"
-  params:
-    name="biosample_blast_results",
-    partition="normal",
-    mem="64000",
-    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: 16
-  version: "2.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    output_on_scratch = names_on_scratch(output, scratch)
-    cp_to_scratch(input, scratch)
-    # Blast contigs
-    assert(file_empty([input[0]])),"Input Contig file is empty."
-    shell(""
-      echo {scratch}
-      source activate {python3_env}
-
-
-      bash {code_dir}/snakehelper_blast.sh {scratch} {input_on_scratch} {output_on_scratch} {tool_dir} {code_dir} {threads} {params.contig_thresh}
-      source deactivate
-      "")
-    assert(file_empty([output_on_scratch[0]])),"Blast output file is empty."
-    cp_from_scratch(output, scratch)
-
-"""
