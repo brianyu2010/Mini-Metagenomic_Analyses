@@ -461,7 +461,8 @@ rule prokka_annotate_genome:
 
 rule checkm_genome:
   input:
-    expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs)
+    # expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs)
+    expand("Genome_Reassembly/genome_scaffolds_withBulk.{genome}.fasta", genome=genomeIDs)
   output:
     "Genome_Reassembly/checkm_lineage_wf_completed.txt"
   params:
@@ -469,21 +470,32 @@ rule checkm_genome:
     qos="normal",
     time="12:00:00",
     partition="quake,normal",
+    contig_thresh=parameters.ix['reassembly_contig_thresh','entry'],
     mem="128000"
   threads: 10
   version: "1.0"
   run:
     # Manage Files
     scratch = os.environ["LOCAL_SCRATCH"]
-    input_on_scratch = names_on_scratch(input, scratch)
-    cp_to_scratch(input, scratch)
+    # input_on_scratch = names_on_scratch(input, scratch)
+    # cp_to_scratch(input, scratch)
     # Perform Process
     genome_folder = "genome_bin"
     checkm_result = "checkm_result"
     shell("""
       mkdir {scratch}/{genome_folder}
-      date; echo; cd {scratch}; ls
-      mv *.fasta {genome_folder}
+      date; echo
+      # cd {scratch}; ls
+      source activate {python2_env}
+      for contig_file in {input}
+      do
+        echo $contig_file
+        scratch_contig_file="{scratch}/{genome_folder}/"$( echo $contig_file | rev | cut -d/ -f1 | rev )
+        echo $scratch_contig_file
+        python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} $contig_file $scratch_contig_file
+      done
+      ls {scratch}; echo; ls {scratch}/{genome_folder}; echo; echo
+      # mv *.fasta {genome_folder}
       """)
     shell("""
       curdir=$(pwd)

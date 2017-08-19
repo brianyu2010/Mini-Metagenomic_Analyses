@@ -117,7 +117,7 @@ rule bulk_quality_trim:
   params: 
     name="bulk_quality_trim", 
     qos="normal",
-    time="6:00:00",
+    time="12:00:00",
     partition="quake,owners", 
     mem="255000",
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),

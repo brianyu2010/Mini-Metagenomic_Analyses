@@ -26,9 +26,9 @@ rule concatenate:
   params: 
     name="combine_fastq",
     qos="normal",
-    time="2:00:00",
+    time="6:00:00",
     partition="normal,quake,owners", 
-    mem="16000", # Don't change this
+    mem="25000", # Don't change this
   threads: 2
   version: "2.0"
   run: 
@@ -123,7 +123,7 @@ rule quality_trim:
   params: 
     name="quality_trim", 
     qos="normal",
-    time="4:00:00",
+    time="12:00:00",
     partition=parameters.ix['subsample_trim_partition','entry'], 
     mem=parameters.ix['subsample_trim_memory','entry'],
     trim_to_read_length=str(parameters.ix['Desired_Read_Length','entry']),

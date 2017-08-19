@@ -32,7 +32,7 @@ rule subsample_spade_assembly:
   params: 
     name="subsample_spade_assembly",
     qos="normal",
-    time="6:00:00",
+    time="12:00:00",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
     mem=parameters.ix['subsample_assembly_memory','entry'],
     kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
