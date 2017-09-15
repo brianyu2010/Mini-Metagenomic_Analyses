@@ -87,7 +87,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       output_on_scratch = names_on_scratch(output, scratch)
       contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
@@ -120,7 +120,7 @@ else:
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       output_on_scratch = names_on_scratch(output, scratch)
       contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
@@ -168,7 +168,7 @@ rule make_supercontig_indices:
   version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -217,7 +217,7 @@ rule subsampleSuperContigPileup:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # Bowtie2 Alignment of reads back to super_contigs (contigs with new names)
@@ -289,7 +289,7 @@ rule shotgunSuperContigPileup:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # Bowtie2 Alignment of reads back to super_contigs (contigs with new names)
@@ -342,7 +342,7 @@ rule VCFgenerate:
   version: "2.0"
   run: 
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     bamfiles = input[1:]
     # Perform organization of contigs    
     shell("""
@@ -377,7 +377,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       output_on_scratch = names_on_scratch(output, scratch)
       contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)
@@ -409,7 +409,7 @@ else:
     version: "2.0"
     run: 
       # Managing files and obtain scratch location
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       output_on_scratch = names_on_scratch(output, scratch)
       contig_on_scratch = names_on_scratch(["super_contig_subset.fasta"], scratch)

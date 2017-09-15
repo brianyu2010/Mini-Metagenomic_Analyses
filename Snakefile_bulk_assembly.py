@@ -30,7 +30,7 @@ rule BulkConcatenate:
   threads: 20
   version: "2.0"
   run: 
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     output_on_scratch = names_on_scratch(output, scratch)
     print(scratch)
     # 2017.02.02 Added to solve the ambiguity of subsample and bulksample
@@ -126,7 +126,7 @@ rule bulk_quality_trim:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     # output_on_scratch = names_on_scratch(output, scratch)
     # cp_to_scratch(input, scratch) # No need
@@ -209,7 +209,7 @@ rule megahit_assembly:
   version: "3.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # perform file size check
@@ -251,7 +251,7 @@ rule megahit_assembly:
         source activate {python2_env}
         metaquast_output_dir={wildcards.subsample}/metaquast_megahit
         quast_output_dir={scratch}/quast_output
-        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
+        # metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
         quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output[0]}
         cp $quast_output_dir/report.txt {output[1]}
         source deactivate
@@ -284,7 +284,7 @@ rule metaSPAdes_assembly:
   version: "3.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # perform file size check
@@ -324,7 +324,7 @@ rule metaSPAdes_assembly:
         source activate {python2_env}
         metaquast_output_dir={wildcards.subsample}/metaquast_metaSPAdes
         quast_output_dir={scratch}/quast_output
-        metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
+        # metaquast.py --plots-format svg --gene-finding --max-ref-number 200 -m {params.contig_thresh} -t {threads} -o $metaquast_output_dir {output[0]}
         quast.py -m {params.contig_thresh} -t {threads} -o $quast_output_dir {output[0]}
         cp $quast_output_dir/report.txt {output[1]}
         source deactivate
@@ -333,101 +333,3 @@ rule metaSPAdes_assembly:
     else:
       print('Input files have size 0')
 
-      
-"""
-rule align_to_bulk_megahit_assembly:
-  # The output of this rule can be made more informative by including coverage of each contigs.
-  input: 
-    "{subsample}/P1_bulk.{subsample}.fastq", 
-    "{subsample}/P2_bulk.{subsample}.fastq",
-    "{subsample}/S1_bulk.{subsample}.fastq",
-    "{subsample}/S2_bulk.{subsample}.fastq",
-    "{subsample}/megahit_contigs.{subsample}.fasta"
-  output:
-    "{subsample}/megahit_contig_alignment.{subsample}.pile"
-    # "{subsample}/megahit_Abundance.{subsample}.cnt"
-  params: 
-    name="bulkMegahitAbundance",
-    qos="normal",
-    time="23:00:00",
-    mem_per_core="4G",
-    partition=parameters.ix['subsample_bowtie2_partition','entry'],
-    mem=parameters.ix['subsample_bowtie2_memory','entry'],
-    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: int(parameters.ix['subsample_bowtie2_thread','entry'])
-  version: "2.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    # Bowtie2 Alignment of reads back to bulk megahit contigs
-    shell(""
-      echo {scratch}; date; echo
-      source activate {python2_env}
-      echo 'Thresholding contigs'
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input[4]} {scratch}/temp.fasta
-      source activate {python3_env};
-      echo 'Creating bowtie2 indices'
-      bowtie2-build --quiet --threads {threads} -f {scratch}/temp.fasta {scratch}/bulkContigBase
-      cat {input[2]} {input[3]} > {scratch}/single.fastq
-      echo; ls {scratch}; echo; du -sh {scratch}; echo
-      echo 'Aligning both paired and single reads'
-      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x {scratch}/bulkContigBase -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
-      echo; ls {scratch}; echo; du -sh {scratch}; echo;
-      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
-      samtools index {wildcards.subsample}/alignResults_sorted.bam
-      samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
-      rm {wildcards.subsample}/alignResults* # Remove intermediate files in  directory
-      echo 'Currently this rule only returns the pileup file'; date
-      "")
-    cp_from_scratch(output, scratch)
-
-
-rule align_to_bulk_metaSPAdes_assembly:
-  # The output of this rule can be made more informative by including coverage of each contigs.
-  input: 
-    "{subsample}/P1_bulk.{subsample}.fastq", 
-    "{subsample}/P2_bulk.{subsample}.fastq",
-    "{subsample}/S1_bulk.{subsample}.fastq",
-    "{subsample}/S2_bulk.{subsample}.fastq",
-    "{subsample}/metaSPAdes_contigs.{subsample}.fasta"
-  output:
-    "{subsample}/metaSPAdes_contig_alignment.{subsample}.pile"
-    # "{subsample}/metaSPAdes_Abundance.{subsample}.cnt"
-  params: 
-    name="bulkMetaSPAdesAbundance",
-    qos="normal",
-    time="23:00:00",
-    mem_per_core="4G",
-    partition=parameters.ix['subsample_bowtie2_partition','entry'],
-    mem=parameters.ix['subsample_bowtie2_memory','entry'],
-    contig_thresh=parameters.ix['biosample_contig_thresh','entry']
-  threads: int(parameters.ix['subsample_bowtie2_thread','entry'])
-  version: "2.0"
-  run:
-    # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
-    # Bowtie2 Alignment of reads back to bulk megahit contigs
-    shell(""
-      echo {scratch}; date; echo
-      source activate {python2_env}
-      echo 'Thresholding contigs'
-      python {code_dir}/threshold_scaffolds.py {params.contig_thresh} {input[4]} {scratch}/temp.fasta
-      source activate {python3_env}
-      echo 'Creating bowtie2 indices'
-      bowtie2-build --quiet --threads {threads} -f {scratch}/temp.fasta {scratch}/bulkContigBase
-      cat {input[2]} {input[3]} > {scratch}/single.fastq
-      echo; ls {scratch}; echo; du -sh {scratch}; echo  
-      echo 'Aligning both paired and single reads'
-      bowtie2 --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} -t -x {scratch}/bulkContigBase -1 {input[0]} -2 {input[1]} -U {scratch}/single.fastq -S {wildcards.subsample}/alignResults.sam
-      echo; ls {scratch}; echo; du -sh {scratch}; echo;
-      samtools_temp_dir={scratch}/temp_output/ # This is for samtools sort to put temp files
-      samtools view -b -o {wildcards.subsample}/alignResults.bam {wildcards.subsample}/alignResults.sam
-      samtools sort -m {params.mem_per_core} --threads {threads} -T $samtools_temp_dir -o {wildcards.subsample}/alignResults_sorted.bam {wildcards.subsample}/alignResults.bam
-      samtools index {wildcards.subsample}/alignResults_sorted.bam
-      samtools mpileup -f {scratch}/temp.fasta -o {output[0]} {wildcards.subsample}/alignResults_sorted.bam
-      echo 'Currently this rule only returns the pileup file'; date
-      "")
-    cp_from_scratch(output, scratch)
-"""

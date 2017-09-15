@@ -32,7 +32,7 @@ rule subsample_spade_assembly:
   params: 
     name="subsample_spade_assembly",
     qos="normal",
-    time="12:00:00",
+    time="8:00:00",
     partition=parameters.ix['subsample_assembly_partition','entry'], 
     mem=parameters.ix['subsample_assembly_memory','entry'],
     kmer=parameters.ix['subsample_spades_kmerlist','entry'] # "21,33,55,77,99"
@@ -40,7 +40,7 @@ rule subsample_spade_assembly:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # perform file size check
@@ -128,7 +128,7 @@ rule subsample_remove_reads:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -164,7 +164,7 @@ rule subsample_quast:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)

@@ -35,7 +35,7 @@ rule combine_threshold_subsample_contigs:
   version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     shell("""
       source activate {python2_env}
       cat {input} > {scratch}/combined_contigs.fasta
@@ -64,7 +64,7 @@ rule create_subsampleContigIndex:
   version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -110,7 +110,7 @@ rule remove_aligned_reads_from_subsampleContigs:
   version: "2.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -152,7 +152,7 @@ rule minimeta_spade_assembly:
   params:    
     name="minimeta_spade_assembly",
     qos="normal",
-    time="6-0",  # means 7 days
+    time="2-0",  # means 6 days
     partition=parameters.ix['biosample_assembly_partition','entry'], 
     mem=parameters.ix['biosample_assembly_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry'],
@@ -161,7 +161,7 @@ rule minimeta_spade_assembly:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # creating a text file to pass to SPAdes
     numfiles = int((len(input)-1)/3)
     print(numfiles)

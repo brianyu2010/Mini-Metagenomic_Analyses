@@ -32,7 +32,7 @@ rule concatenate:
   threads: 2
   version: "2.0"
   run: 
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     output_on_scratch = names_on_scratch(output, scratch)
     print(scratch)
     # 2017.02.02 Added to solve the ambiguity of subsample and bulksample
@@ -132,7 +132,7 @@ rule quality_trim:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     # output_on_scratch = names_on_scratch(output, scratch)
     # cp_to_scratch(input, scratch) # No need
@@ -201,7 +201,7 @@ rule overrep_seq:
   version: "2.0"
   run: 
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -239,7 +239,7 @@ rule preprocess:
   version: "2.0"
   run:
     # organize input
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     # trim fastq to desired read length (ie. 75 bp) if required
     if int(params.trim_to_read_length) <= 0:

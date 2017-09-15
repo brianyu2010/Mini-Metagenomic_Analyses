@@ -95,7 +95,7 @@ rule readsAndContigs_spades_assembly:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # creating a text file to pass to SPAdes
     numfiles = int(len(input)/4)
     print(numfiles)
@@ -177,7 +177,7 @@ rule readsOnly_spades_assembly:
   version: "2.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # creating a text file to pass to SPAdes
     numfiles = int(len(input)/4)
     print(numfiles)
@@ -241,7 +241,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     params:
       name="make_super_contigs_bulk",
       qos="normal",
-      time="16:00:00",
+      time="6:00:00",
       partition="normal,quake",
       mem="126000",
       contig_thresh=parameters.ix['biosample_contig_thresh','entry']
@@ -249,7 +249,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y' or bulk_flag == '
     version: "2.0"
     run:
       # Manage files and obtain scratch location
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       # The set +u; prevents unbound variable errors 2016.08.18
       # down samples all contigs
@@ -302,7 +302,7 @@ else:
     version: "2.0"
     run:
       # Manage files and obtain scratch locations
-      scratch = os.environ["LOCAL_SCRATCH"]
+      scratch = os.environ["L_SCRATCH_JOB"]
       input_on_scratch = names_on_scratch(input, scratch)
       # down samples all contigs, and move to scratch
       for i in range(len(input)):

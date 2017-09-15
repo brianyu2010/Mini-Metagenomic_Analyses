@@ -142,7 +142,7 @@ rule make_genome_index:
   version: "1.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     cp_to_scratch(input, scratch)
@@ -187,7 +187,7 @@ rule extract_reads_bulk:
   version: "1.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     input_on_scratch = names_on_scratch(input, scratch)
     output_on_scratch = names_on_scratch(output, scratch)
     # bowtie2 can handle fastq.gz files
@@ -234,7 +234,7 @@ rule extract_reads_minimeta_allSubSamples:
   version: "1.0"
   run:
     # Manage files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # Performing bowtie2 alignment --time --phred33 --un <path> --un-conc <path>
     numSubSamples = len(subsampleIDs)
     p1 = input[(0 * numSubSamples) : (1 * numSubSamples)]
@@ -290,7 +290,7 @@ rule assemble_genome_with_bulk:
   version: "1.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # creating a text file to pass to SPAdes
     # numfiles_subsample = len(subsampleIDs)
     numfiles_subsample = 1
@@ -377,7 +377,7 @@ rule assemble_genome_minimeta_only:
   version: "1.0"
   run:
     # Managing files and obtain scratch location
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # creating a text file to pass to SPAdes
     numfiles = int((len(input)-1)/3)
     print(numfiles)
@@ -447,7 +447,7 @@ rule prokka_annotate_genome:
   threads: 5
   version: "1.0"
   run:
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     shell("""
       date; echo
       outdir=$( echo {output} | cut -d/ -f 1-2 )
@@ -476,7 +476,7 @@ rule checkm_genome:
   version: "1.0"
   run:
     # Manage Files
-    scratch = os.environ["LOCAL_SCRATCH"]
+    scratch = os.environ["L_SCRATCH_JOB"]
     # input_on_scratch = names_on_scratch(input, scratch)
     # cp_to_scratch(input, scratch)
     # Perform Process
