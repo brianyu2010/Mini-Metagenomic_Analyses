@@ -275,7 +275,7 @@ rule metaSPAdes_assembly:
   params: 
     name="bulk_metaSPAdes_assembly",
     qos="normal",
-    time="3-0",
+    time="2-0",
     partition=parameters.ix['biosample_assembly_partition','entry'], 
     mem=parameters.ix['biosample_assembly_memory','entry'],
     contig_thresh=parameters.ix['biosample_contig_thresh','entry'],

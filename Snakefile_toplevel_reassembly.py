@@ -37,6 +37,8 @@
 # 2017.07.08 Added functionality to perform genome reassembly from mini-metagenomic and bulk sub-samples
 #            Need to add another entry into parameters file called genome_cluster_file
 # 2017.07.21 Made bowtie2 into 1 rule, added checkm and prokka rules
+# 2017.10.22 Added Snakefile_reassembly_alignment.py for aligning all subsample and shotgun
+#            reads against grouped and reassembled genomes. Output depth profile and read counts.
 
 # Import packages
 import os, glob, subprocess
@@ -84,6 +86,7 @@ work_directory = work_directory_base+'/'+parameters.ix["biosample_name",'entry']
 # include: "Snakefile.utils_Mark"
 include: "Snakefile.utils_Felix"
 include: "Snakefile_helper_Brian.py"
+include: "Snakefile_reassembly_alignment.py"
 
 # User defined constants
 workdir: work_directory
@@ -95,10 +98,13 @@ workdir: work_directory
 if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y':
   rule all_withbulk:
     input:
-      expand("Genome_Reassembly/genome_contigs_miniMeta.{genome}.fasta", genome=genomeIDs),
       expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs),
+      expand("Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt", genome=genomeIDs),
+      expand("Genome_Reassembly/shotgunReads_realignmentDepthProfile.{genome}.txt", genome=genomeIDs),
+      expand("Genome_Reassembly/shotgunReads_absoluteRealignmentReadCount.{genome}.txt", genome=genomeIDs),
+      expand("Genome_Reassembly/shotgunReads_normalizedRealignmentReadCount.{genome}.txt", genome=genomeIDs),
       expand("Genome_Reassembly/prokka_annotation_{genome}/genome_annotation.{genome}.txt", genome=genomeIDs),
-      "Genome_Reassembly/checkm_lineage_wf_completed.txt"
+      "Genome_Reassembly/checkm_lineage_wf_output.txt"
     params:
       name="top_level_genome_reassembly",
       qos="normal",
@@ -110,8 +116,7 @@ if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y'
 else:
   rule all_withbulk:
     input:
-      expand("Genome_Reassembly/genome_contigs_miniMeta.{genome}.fasta", genome=genomeIDs),
-      # expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs)
+      expand("Genome_Reassembly/genome_contigs_miniMeta.{genome}.fasta", genome=genomeIDs)
     params:
       name="top_level_genome_reassembly",
       qos="normal",
@@ -193,10 +198,8 @@ rule extract_reads_bulk:
     # bowtie2 can handle fastq.gz files
     shell("""
       date; source activate {python3_env}
-      # basename=$(echo {input[4]} | cut -d/ -f2 | cut -d. -f1)
       basename=$(echo {input[4]} | cut -d. -f1)
       echo $basename
-      # cd {scratch}
       cat {input[2]} {input[3]} > {scratch}/single_reads.fastq
       echo 'Using local alignment to include as many reads as possible reads'
       bowtie2 --time --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} --al {scratch}/alignedSingle --al-conc {scratch}/alignedPaired -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single_reads.fastq -S {scratch}/alignResults.sam
@@ -435,7 +438,8 @@ rule assemble_genome_minimeta_only:
 
 rule prokka_annotate_genome:
   input:
-    "Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta"
+    # "Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta"
+    "Genome_Reassembly/genome_scaffolds_withBulk.{genome}.fasta"
   output:
     "Genome_Reassembly/prokka_annotation_{genome}/genome_annotation.{genome}.txt"
   params:
@@ -443,18 +447,22 @@ rule prokka_annotate_genome:
     qos="normal",
     time="12:00:00",
     partition="quake,normal,owners",
-    mem="64000"
+    mem="64000",
+    contig_thresh=parameters.ix['reassembly_contig_thresh','entry']
   threads: 5
   version: "1.0"
   run:
     scratch = os.environ["L_SCRATCH_JOB"]
+    input_on_scratch = names_on_scratch(input, scratch) 
     shell("""
       date; echo
+      source activate {python2_env}
+      python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} {input} {input_on_scratch}
       outdir=$( echo {output} | cut -d/ -f 1-2 )
       prefix=$( echo {output} | cut -d/ -f3 | cut -d. -f 1-2 )
       echo $outdir; echo $prefix; echo
       source activate {prokka_env}
-      prokka --metagenome --force --outdir $outdir --prefix $prefix --cpus {threads} {input}
+      prokka --metagenome --force --outdir $outdir --prefix $prefix --cpus {threads} {input_on_scratch}
       source deactivate
       """)
 
@@ -464,7 +472,7 @@ rule checkm_genome:
     # expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs)
     expand("Genome_Reassembly/genome_scaffolds_withBulk.{genome}.fasta", genome=genomeIDs)
   output:
-    "Genome_Reassembly/checkm_lineage_wf_completed.txt"
+    "Genome_Reassembly/checkm_lineage_wf_output.txt"
   params:
     name="checkm_genome",
     qos="normal",
@@ -478,6 +486,7 @@ rule checkm_genome:
     # Manage Files
     scratch = os.environ["L_SCRATCH_JOB"]
     # input_on_scratch = names_on_scratch(input, scratch)
+    output_on_scratch = names_on_scratch(output, scratch)
     # cp_to_scratch(input, scratch)
     # Perform Process
     genome_folder = "genome_bin"
@@ -495,7 +504,7 @@ rule checkm_genome:
         python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} $contig_file $scratch_contig_file
       done
       ls {scratch}; echo; ls {scratch}/{genome_folder}; echo; echo
-      # mv *.fasta {genome_folder}
+      mv *.fasta {genome_folder}
       """)
     shell("""
       curdir=$(pwd)
@@ -503,7 +512,7 @@ rule checkm_genome:
       cd {scratch}; date; echo; ls; echo;
       source activate {python2_env}
       mkdir temp_dir
-      checkm lineage_wf -t {threads} --pplacer_threads {threads} --extension fasta --tmpdir temp_dir {genome_folder} {checkm_result}
+      checkm lineage_wf -t {threads} --pplacer_threads {threads} --extension fasta --tmpdir temp_dir --file {output_on_scratch} {genome_folder} {checkm_result}
       source deactivate; echo;
       # right now you are still in {scratch}
       echo "Move checkm results back"; echo; ls; echo
@@ -518,7 +527,7 @@ rule checkm_genome:
       if [ -d $output_dir/{checkm_result} ]
       then
         date; echo "checkm Completed"; echo
-        touch {output}
+        mv {output_on_scratch} {output}
+        # touch {output}
       fi
       """)
-
