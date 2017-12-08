@@ -18,11 +18,11 @@ rule make_reassembled_grouped_genome_index:
   params:
     name="reassembled_grouped_genome_index",
     qos="normal",
-    time="4:00:00",
+    time="12:00:00",
     partition="quake,normal",
-    mem="10000",
+    mem="80000",
     contig_thresh=parameters.ix['reassembly_contig_thresh','entry']
-  threads: 1
+  threads: 5
   version: "1.0"
   run:
     # Manage files and obtain scratch location
@@ -60,6 +60,7 @@ rule reassembledGenome_minimeta_alignment_allSubSamples:
     "Genome_Reassembly/genome_scaffolds_withBulk_{genome}.rev.2.bt2l",
     "Genome_Reassembly/genome_scaffolds_withBulk.{genome}.fasta"
   output:
+    # expand("{subsample}/alignResults_{{genome}}.bam",subsample=subsampleIDs) 
     "Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt"
   params:
     name="reassembledGenome_minimeta_alignment",
@@ -103,16 +104,59 @@ rule reassembledGenome_minimeta_alignment_allSubSamples:
         samtools sort -m {params.mem_per_core} --threads {threads} -o {sample}/alignResults_{wildcards.genome}_sorted.bam {sample}/alignResults_{wildcards.genome}.bam
         samtools index {sample}/alignResults_{wildcards.genome}_sorted.bam
         source deactivate
+        rm {scratch}/single_reads.{sample}.fastq
         """)
     # Combine coverage profile from all bams
     genome_sorted_bam_files = [x+'/alignResults_'+wildcards.genome+'_sorted.bam' for x in subsampleIDs]
-    header_text = 'ContigName\tPosition\t' + '\t'.join(subsampleIDs)
+    header_text = 'ContigName Position ' + ' '.join(subsampleIDs) # separated by space, later changed to \t 
+    # header_text = 'ContigName\tPosition\t' + '\t'.join(subsampleIDs)
     print(header_text)
     shell("""
       echo Combining_coverage_into_depth_file
+      echo {header_text} | tr ' ' '\t' > {output_on_scratch} 
       source activate {python3_env}
-      echo -e {header_text} > {output_on_scratch}
+      ls {scratch}
       samtools depth -a {genome_sorted_bam_files} >> {output_on_scratch}
+      head {output_on_scratch} 
+      source deactivate
+      """)
+    # Remove intermediate files saved in each subsample folder
+    for i in range(numSubSamples):
+      sample = subsampleIDs[i]
+      shell("rm {sample}/alignResults_{wildcards.genome}* ")
+    cp_from_scratch(output, scratch)
+
+
+rule combine_miniMetaRealignment_to_Reassembly:
+  input:
+    expand("{subsample}/alignResults_{{genome}}.bam",subsample=subsampleIDs) 
+  output:
+    # "Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt"
+  params:
+    name="minimeat_combine_realignment",
+    qos="normal",
+    time=parameters.ix['reassembly_bowtie2_time','entry'],
+    mem_per_core="10G",
+    partition="bigmem",  # parameters.ix['reassembly_bowtie2_partition','entry'],
+    mem="500000" # parameters.ix['reassembly_bowtie2_memory','entry'],
+    # contig_thresh=parameters.ix['reassembly_contig_thresh','entry']
+  threads: 2 # int(parameters.ix['reassembly_bowtie2_thread','entry'])
+  version: "1.0"
+  run:
+    # Manage files and obtain scratch location
+    scratch = os.environ["L_SCRATCH_JOB"]
+    output_on_scratch = names_on_scratch(output, scratch)
+    # Performing bowtie2 alignment --time --phred33 --un <path> --un-conc <path>
+    numSubSamples = len(subsampleIDs)
+    # Combine coverage profile from all bams
+    header_text = 'ContigName Position ' + ' '.join(subsampleIDs) # separated by space, later changed to \t 
+    print(header_text)
+    shell("""
+      echo Combining_coverage_into_depth_file
+      echo {header_text} | tr ' ' '\t' > {output_on_scratch} 
+      source activate {python3_env}
+      ls {scratch}
+      samtools depth -a {input} >> {output_on_scratch}
       head {output_on_scratch} 
       source deactivate
       """)

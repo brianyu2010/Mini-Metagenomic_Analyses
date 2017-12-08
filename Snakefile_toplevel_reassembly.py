@@ -98,13 +98,13 @@ workdir: work_directory
 if bulk_flag =='Yes' or bulk_flag == 'yes' or bulk_flag == 'Y'or bulk_flag =='y':
   rule all_withbulk:
     input:
-      expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs),
-      expand("Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt", genome=genomeIDs),
+      # expand("Genome_Reassembly/genome_contigs_withBulk.{genome}.fasta", genome=genomeIDs),
+      # expand("Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt", genome=genomeIDs),
       expand("Genome_Reassembly/shotgunReads_realignmentDepthProfile.{genome}.txt", genome=genomeIDs),
       expand("Genome_Reassembly/shotgunReads_absoluteRealignmentReadCount.{genome}.txt", genome=genomeIDs),
-      expand("Genome_Reassembly/shotgunReads_normalizedRealignmentReadCount.{genome}.txt", genome=genomeIDs),
-      expand("Genome_Reassembly/prokka_annotation_{genome}/genome_annotation.{genome}.txt", genome=genomeIDs),
-      "Genome_Reassembly/checkm_lineage_wf_output.txt"
+      expand("Genome_Reassembly/shotgunReads_normalizedRealignmentReadCount.{genome}.txt", genome=genomeIDs)
+      # expand("Genome_Reassembly/prokka_annotation_{genome}/genome_annotation.{genome}.txt", genome=genomeIDs),
+      # "Genome_Reassembly/checkm_lineage_wf_output.txt"
     params:
       name="top_level_genome_reassembly",
       qos="normal",
@@ -202,7 +202,7 @@ rule extract_reads_bulk:
       echo $basename
       cat {input[2]} {input[3]} > {scratch}/single_reads.fastq
       echo 'Using local alignment to include as many reads as possible reads'
-      bowtie2 --time --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} --al {scratch}/alignedSingle --al-conc {scratch}/alignedPaired -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single_reads.fastq -S {scratch}/alignResults.sam
+      bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --al {scratch}/alignedSingle --al-conc {scratch}/alignedPaired -x $basename -1 {input[0]} -2 {input[1]} -U {scratch}/single_reads.fastq -S {scratch}/alignResults.sam
       mv {scratch}/alignedPaired.1 {output[0]}
       mv {scratch}/alignedPaired.2 {output[1]}
       mv {scratch}/alignedSingle {output[2]}
@@ -245,18 +245,23 @@ rule extract_reads_minimeta_allSubSamples:
     s1 = input[(2 * numSubSamples) : (3 * numSubSamples)]
     s2 = input[(3 * numSubSamples) : (4 * numSubSamples)]
     single_reads_name = ['' for i in range(numSubSamples)]
+    # grab basename for genome index
+    basename = input[-2].split('.')[0] # Last file or second last are both fine
+    print(basename)
     for i in range(numSubSamples):
-      single_reads_name[i] = scratch + '/single_reads.' + subsampleIDs[i] + '.fastq'
-      shell("cat {s1[i]} {s2[i]} > {single_reads_name[i]}")
+      sample = subsampleIDs[i]
+      s1fastq = s1[i]
+      s2fastq = s2[i]
+      single_fastq = scratch + '/single_reads.' + sample + '.fastq'
+      single_reads_name[i] = single_fastq
+      shell("cat {s1fastq} {s2fastq} > {single_fastq}")
     p1 = ','.join(p1)
     p2 = ','.join(p2)
     s = ','.join(single_reads_name)
     shell("""
       date; source activate {python3_env}
-      basename=$(echo {input[-1]} | cut -d. -f1)
-      echo $basename
       echo 'Using local alignment to remove reads'
-      bowtie2 --time --phred33 --very-sensitive-local -I 100 -X 2000 -p {threads} --al {scratch}/alignedSingle --al-conc {scratch}/alignedPaired -x $basename -1 {p1} -2 {p2} -U {s} -S {scratch}/alignResults.sam
+      bowtie2 --time --phred33 --very-sensitive -I 100 -X 2000 -p {threads} --al {scratch}/alignedSingle --al-conc {scratch}/alignedPaired -x {basename} -1 {p1} -2 {p2} -U {s} -S {scratch}/alignResults.sam
       mv {scratch}/alignedPaired.1 {output[0]}
       mv {scratch}/alignedPaired.2 {output[1]}
       mv {scratch}/alignedSingle {output[2]}
@@ -504,7 +509,6 @@ rule checkm_genome:
         python {code_dir}/process_scaffolds.py --lengthThresh {params.contig_thresh} $contig_file $scratch_contig_file
       done
       ls {scratch}; echo; ls {scratch}/{genome_folder}; echo; echo
-      mv *.fasta {genome_folder}
       """)
     shell("""
       curdir=$(pwd)
