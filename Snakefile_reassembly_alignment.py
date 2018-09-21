@@ -60,7 +60,7 @@ rule reassembledGenome_minimeta_alignment_allSubSamples:
     "Genome_Reassembly/genome_scaffolds_withBulk_{genome}.rev.2.bt2l",
     "Genome_Reassembly/genome_scaffolds_withBulk.{genome}.fasta"
   output:
-    # expand("{subsample}/alignResults_{{genome}}.bam",subsample=subsampleIDs) 
+    expand("{subsample}/alignResults_{{genome}}.bam",subsample=subsampleIDs) 
     "Genome_Reassembly/miniMetaReads_realignmentDepthProfile.{genome}.txt"
   params:
     name="reassembledGenome_minimeta_alignment",
